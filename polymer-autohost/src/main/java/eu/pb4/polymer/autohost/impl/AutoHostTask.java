@@ -1,16 +1,10 @@
 package eu.pb4.polymer.autohost.impl;
 
 import eu.pb4.polymer.resourcepack.impl.PolymerResourcePackMod;
-import net.minecraft.dialog.*;
-import net.minecraft.dialog.action.DynamicCustomDialogAction;
-import net.minecraft.dialog.body.PlainMessageDialogBody;
-import net.minecraft.dialog.type.NoticeDialog;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.c2s.common.ResourcePackStatusC2SPacket;
-import net.minecraft.network.packet.s2c.common.ClearDialogS2CPacket;
 import net.minecraft.network.packet.s2c.common.ResourcePackRemoveS2CPacket;
 import net.minecraft.network.packet.s2c.common.ResourcePackSendS2CPacket;
-import net.minecraft.network.packet.s2c.common.ShowDialogS2CPacket;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerConfigurationNetworkHandler;
@@ -56,7 +50,6 @@ public class AutoHostTask implements ServerPlayerConfigurationTask {
         }
 
         if (this.hasDelayed) {
-            this.sendDialog(sender);
             return;
         }
         for (var pack : packs) {
@@ -65,27 +58,11 @@ public class AutoHostTask implements ServerPlayerConfigurationTask {
     }
 
     private void sendDialog(Consumer<Packet<?>> sender) {
-        if (!AutoHost.config.dialog) {
-            return;
-        }
-
         this.statusCount = PolymerResourcePackMod.STATUS.size();
-        sender.accept(new ShowDialogS2CPacket(RegistryEntry.of(new NoticeDialog(
-                new DialogCommonData(AutoHost.dialogTitle, Optional.empty(),false, false, AfterAction.CLOSE,
-                        List.of(new PlainMessageDialogBody(PolymerResourcePackMod.STATUS.isEmpty() || !AutoHost.config.dialogShowStatus ? AutoHost.dialogDefaultBody :
-                                Text.literal(String.join("\n", PolymerResourcePackMod.STATUS
-                                        .subList(Math.max(PolymerResourcePackMod.STATUS.size() - 32, 0), PolymerResourcePackMod.STATUS.size()))), 300)), List.of()),
-                new DialogActionButtonData(new DialogButtonData(
-                        Text.translatable("menu.disconnect"), 150),
-                        Optional.of(new DynamicCustomDialogAction(DISCONNECT, Optional.empty())))
-        ))));
     }
 
     public void tick(Consumer<Packet<?>> sender) {
         if (this.hasDelayed && this.isReady.getAsBoolean()) {
-            if (AutoHost.config.dialog) {
-                sender.accept(ClearDialogS2CPacket.INSTANCE);
-            }
             var delayed = this.delayed.get();
             for (var pack : delayed) {
                 if (pack.isRequired()) {

@@ -8,6 +8,7 @@ import net.minecraft.entity.effect.StatusEffectCategory;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
+import org.jetbrains.annotations.Nullable;
 import xyz.nucleoid.packettweaker.PacketContext;
 
 public class TestStatusEffect extends StatusEffect implements PolymerStatusEffect {
@@ -29,7 +30,7 @@ public class TestStatusEffect extends StatusEffect implements PolymerStatusEffec
     }
 
     @Override
-    public StatusEffect getPolymerReplacement(PacketContext context) {
+    public @Nullable StatusEffect getPolymerReplacement(StatusEffect potion, PacketContext context) {
         return StatusEffects.CONDUIT_POWER.value();
     }
 }

@@ -20,6 +20,10 @@ public interface PolymerSyncedObject<T> extends PolymerObject {
      */
     T getPolymerReplacement(T object, PacketContext context);
 
+    default T getPolymerReplacement(PacketContext context) {
+        return getPolymerReplacement(null, context);
+    }
+
     /**
      * Allows to gate syncing of this object with clients running polymer
      */

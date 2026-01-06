@@ -48,6 +48,7 @@ public class TestEntity3 extends CreeperEntity implements PolymerEntity {
     private float previousLimbPos = Float.MIN_NORMAL;
     private float deathAngle;
 
+    @SuppressWarnings("removal")
     public TestEntity3(EntityType<TestEntity3> entityEntityType, World world) {
         super(entityEntityType, world);
         this.holder = new ElementHolder() {

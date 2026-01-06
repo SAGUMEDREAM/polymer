@@ -37,4 +37,5 @@ public interface PolymerStatusEffect extends PolymerSyncedObject<StatusEffect> {
     default StatusEffect getPolymerReplacement(StatusEffect potion, PacketContext context) {
         return null;
     }
+
 }

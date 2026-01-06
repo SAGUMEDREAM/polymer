@@ -83,6 +83,7 @@ public class AnimatedBlock extends FallingBlock implements PolymerBlock, BlockWi
         private final ItemDisplayElement moonElement;
         private int tick = 0;
 
+        @SuppressWarnings("removal")
         public CustomHolder(ServerWorld world, BlockState state) {
             this.planetElement = this.addElement(new ItemDisplayElement(Items.LIGHT_BLUE_WOOL));
             this.moonElement = this.addElement(new ItemDisplayElement(Items.DECORATED_POT));
