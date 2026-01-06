@@ -14,33 +14,44 @@ import xyz.nucleoid.packettweaker.PacketContext;
 
 @Mixin(targets = "net/minecraft/network/codec/PacketCodecs$18", priority = 500)
 public abstract class PacketCodecsRegistryMixin {
-    @SuppressWarnings({"rawtypes", "ShadowModifiers"})
-    @Shadow
-    @Final
+
+    @Shadow @Final
     private RegistryKey field_53746;
+
+    @SuppressWarnings({"rawtypes", "ShadowModifiers"})
 
     @ModifyVariable(method = "encode(Lnet/minecraft/network/RegistryByteBuf;Ljava/lang/Object;)V", at = @At("HEAD"), argsOnly = true)
     private Object polymer$changeData(Object val, RegistryByteBuf buf) {
         var player = PacketContext.get();
+        //noinspection unchecked
+        var reg = buf.getRegistryManager().getOrThrow(this.field_53746);
 
-        if (val instanceof PolymerSyncedObject<?> polymerSyncedObject) {
-            var obj = polymerSyncedObject.getPolymerReplacement(player);
+
+        if (val instanceof RegistryEntry<?> registryEntry) {
+            var value = registryEntry.value();
+            var obj = PolymerSyncedObject.getSyncedObject(reg, value);
 
             if (obj != null) {
-                return obj;
-            }
-        } else if (val instanceof RegistryEntry<?> registryEntry) {
-            var value = registryEntry.value();
-            if (value instanceof PolymerSyncedObject<?> polymerSyncedObject) {
-                var obj = polymerSyncedObject.getPolymerReplacement(player);
+                var replacement = obj.getPolymerReplacement(value, player);
 
-                if (obj != null) {
+                if (replacement != null) {
                     //noinspection unchecked
-                    return buf.getRegistryManager().getOrThrow(this.field_53746).getEntry(obj);
+                    return reg.getEntry(replacement);
                 }
+
+                return reg.getEntry(0);
+            }
+        } else {
+            var obj = PolymerSyncedObject.getSyncedObject(reg, val);
+            if (obj != null) {
+                var replacement = obj.getPolymerReplacement(val, player);
+
+                if (replacement != null) {
+                    return replacement;
+                }
+                return reg.get(0);
             }
         }
-
 
         return val;
     }

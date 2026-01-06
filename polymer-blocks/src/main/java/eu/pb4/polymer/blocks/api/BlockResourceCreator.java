@@ -79,16 +79,16 @@ public final class BlockResourceCreator {
         if (type.name().contains("TRAPDOOR")) {
             predicate = b -> b.isOf(Blocks.IRON_TRAPDOOR);
         } else if (type.name().contains("DOOR")) {
-            predicate = b -> b.isOf(Blocks.IRON_TRAPDOOR);
+            predicate = b -> b.isOf(Blocks.IRON_DOOR);
         }  else if (type == BlockModelType.VINES_BLOCK) {
             predicate = b -> b.isOf(Blocks.TWISTING_VINES);
         }
 
         if (predicate != null) {
-            x = requestBlock(type, predicate, EMPTY);
+            x = requestBlockImpl(type, predicate, true, EMPTY);
         }
         if (x == null) {
-            x = requestBlock(type, EMPTY);
+            x = requestBlockImpl(type, y -> true, true, EMPTY);
         }
         if (x == null) {
             return null;
@@ -105,9 +105,18 @@ public final class BlockResourceCreator {
     public BlockState requestBlock(BlockModelType type, PolymerBlockModel... model) {
         return requestBlock(type, x -> true, model);
     }
+
     public BlockState requestBlock(BlockModelType type, Predicate<BlockState> predicate, PolymerBlockModel... model) {
+        return requestBlockImpl(type, predicate, false, model);
+    }
+
+    private BlockState requestBlockImpl(BlockModelType type, Predicate<BlockState> predicate, boolean reversed, PolymerBlockModel... model) {
         var states = this.states.get(type);
         if (!states.isEmpty()) {
+            if (reversed) {
+                states = states.reversed();
+            }
+
             BlockState state = null;
             for (var s : states) {
                 if (predicate.test(s)) {
@@ -150,7 +159,7 @@ public final class BlockResourceCreator {
             return;
         }
 
-        var map = new HashMap<String, HashMap<String, JsonArray>>();
+        var map = new TreeMap<String, HashMap<String, JsonArray>>();
 
         for (var blockStateEntry : this.models.entrySet()) {
             if (!this.hasRequested.contains(blockStateEntry.getKey().getBlock())) {

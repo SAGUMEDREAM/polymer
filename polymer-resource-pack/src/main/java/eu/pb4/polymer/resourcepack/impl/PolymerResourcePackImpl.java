@@ -15,6 +15,8 @@ public class PolymerResourcePackImpl {
     public static final UUID MAIN_UUID;
     public static final Path DEFAULT_PATH;
     public static final String FILE_NAME;
+    public static final boolean IGNORE_PACK_VERSION;
+    public static final boolean LOG_ERRORS;
 
 
     static {
@@ -24,12 +26,14 @@ public class PolymerResourcePackImpl {
         FILE_NAME = config.resourcePackPath;
 
         MAIN_UUID = config.mainUuid;
+        IGNORE_PACK_VERSION = config.ignorePackVersion;
 
         FORCE_REQUIRE = config.markResourcePackAsRequiredByDefault || CompatStatus.POLYMC;
+        LOG_ERRORS = config.logErrors || FabricLoader.getInstance().isDevelopmentEnvironment();
     }
 
     public static Config loadConfig() {
-        return CommonImpl.loadConfig("resource-pack", Config.class);
+        return CommonImpl.loadAndRegisterConfig("resource-pack", Config.class);
     }
 
 
@@ -51,5 +55,11 @@ public class PolymerResourcePackImpl {
         public String _c8 = "Prevents selected paths from being added to resource pack, if they start with provided text.";
         @SerializedName("prevent_path_with")
         public List<String> preventedPaths = List.of();
+        public String _c9 = "Removes the incompatibility warning on the default pack, by marking it as compatible with everything.";
+        @SerializedName("ignore_pack_version")
+        public boolean ignorePackVersion = false;
+        public String _c10 = "Toggles logging of non-critical errors when generating the pack.";
+        @SerializedName("log_errors")
+        public boolean logErrors = true;
     }
 }

@@ -39,6 +39,7 @@ class FakeEntity extends Entity {
 
     }
 
+
     @Override
     public Packet<ClientPlayPacketListener> createSpawnPacket(EntityTrackerEntry entityTrackerEntry) {
         return super.createSpawnPacket(entityTrackerEntry);

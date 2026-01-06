@@ -37,6 +37,27 @@ public class AutoHostConfig {
     public String _c9 = "Moves resource pack generation earlier when running on server. Might break some mods.";
     @SerializedName("setup_early")
     public boolean loadEarly = CommonImpl.DEV_ENV;
+    public String _c10 = "Enables dialog infobox when resource pack isn't ready.";
+    @SerializedName("resource_pack_status_dialog")
+    public boolean dialog = true;
+    public String _c11 = "Enables dialog infobox when resource pack isn't ready.";
+    @SerializedName("dialog_title")
+    public JsonElement dialogTitle = new JsonPrimitive("The server's resource pack is still generating!");
+    public String _c12 = "Default body text before status is ready (or when it's disabled).";
+    @SerializedName("dialog_default_body")
+    public JsonElement dialogDefaultBody = new JsonPrimitive("Waiting...");
+    public String _c13 = "Enables displaying internal resource pack generation status.";
+    @SerializedName("dialog_show_status")
+    public boolean dialogShowStatus = true;
+    public String _c14 = "Clears all client-side resourcepacks before sending Autohost handled ones.";
+    @SerializedName("clear_all_client_resource_packs")
+    public boolean clearResourcePacks = false;
+    public String _c15 = "Adds hash to name of resource pack file served with web server";
+    @SerializedName("include_hash_in_name")
+    public boolean includeHashInName = true;
+    public String _c16 = "Value of Cache-Control max age header";
+    @SerializedName("cache_control_max_age")
+    public int cacheControlAge = 31536000;
 
     public static class ExternalResourcePack {
         public UUID id;

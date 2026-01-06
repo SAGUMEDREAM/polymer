@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.annotations.SerializedName;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
+import eu.pb4.polymer.autohost.api.AutoHostUtils;
 import eu.pb4.polymer.autohost.impl.AutoHost;
 import eu.pb4.polymer.common.impl.CommonImpl;
 import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
@@ -22,7 +23,6 @@ public class StandaloneWebServerProvider extends AbstractProvider  {
     private Config config;
     private HttpServer server;
     public String baseAddress = "";
-    public String fullAddress = "";
 
     @Nullable
     public void serverStarted(MinecraftServer minecraftServer) {
@@ -54,15 +54,14 @@ public class StandaloneWebServerProvider extends AbstractProvider  {
 
     protected boolean updateHash() {
         if (super.updateHash()) {
-            this.fullAddress = this.baseAddress + "main.zip";
             return true;
         }
         return false;
     }
 
     @Override
-    protected String getAddress(ClientConnection connection) {
-        return this.fullAddress;
+    protected String getAddress(ClientConnection connection, String file) {
+        return this.baseAddress + file;
     }
 
     private static InetSocketAddress createBindAddress(MinecraftServer server, Config config) {
@@ -91,6 +90,7 @@ public class StandaloneWebServerProvider extends AbstractProvider  {
                 ) {
                     exchange.getResponseHeaders().add("Server", "polymer-autohost");
                     exchange.getResponseHeaders().add("Content-Type", "application/zip");
+                    exchange.getResponseHeaders().add("Cache-Control", "public, max-age=" + AutoHost.config.cacheControlAge);
                     exchange.sendResponseHeaders(HttpStatus.SC_OK, size);
 
                     input.transferTo(output);

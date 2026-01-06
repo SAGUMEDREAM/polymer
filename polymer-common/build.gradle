@@ -13,6 +13,8 @@ dependencies {
     }
     modCompileOnly "xyz.nucleoid:disguiselib-fabric:1.2.2"
     modCompileOnly "org.geysermc.floodgate:api:2.2.0-SNAPSHOT"
+    compileOnly "com.viaversion:viaversion-api:5.7.1-SNAPSHOT"
+    modCompileOnly "com.terraformersmc:modmenu:13.0.3"
 }
 
 afterEvaluate {

@@ -7,7 +7,6 @@ import com.mojang.authlib.GameProfile;
 import eu.pb4.polymer.networking.impl.*;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.DisconnectionInfo;
-import net.minecraft.network.NetworkPhase;
 import net.minecraft.network.NetworkState;
 import net.minecraft.network.listener.PacketListener;
 import net.minecraft.network.listener.ServerConfigurationPacketListener;

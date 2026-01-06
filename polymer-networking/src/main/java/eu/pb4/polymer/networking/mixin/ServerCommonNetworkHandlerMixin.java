@@ -3,6 +3,7 @@ package eu.pb4.polymer.networking.mixin;
 import eu.pb4.polymer.networking.api.util.ServerDynamicPacket;
 import eu.pb4.polymer.networking.impl.NetworkHandlerExtension;
 import eu.pb4.polymer.networking.impl.ServerPacketRegistry;
+import io.netty.channel.ChannelFutureListener;
 import it.unimi.dsi.fastutil.objects.*;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.network.ClientConnection;

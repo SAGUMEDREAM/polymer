@@ -6,6 +6,7 @@ import eu.pb4.polymer.virtualentity.api.ElementHolder;
 import eu.pb4.polymer.virtualentity.api.VirtualEntityUtils;
 import eu.pb4.polymer.virtualentity.impl.HolderAttachmentHolder;
 import eu.pb4.polymer.virtualentity.impl.compat.ImmersivePortalsUtils;
+import eu.pb4.polymer.virtualentity.mixin.block.WorldChunkAccessor;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerChunkManager;
@@ -24,6 +25,7 @@ public class ChunkAttachment implements HolderAttachment {
     private final WorldChunk chunk;
     protected Vec3d pos;
     private final boolean autoTick;
+    private volatile boolean removed = false;
 
     public ChunkAttachment(ElementHolder holder, WorldChunk chunk, Vec3d position, boolean autoTick) {
         this.chunk = chunk;
@@ -75,14 +77,18 @@ public class ChunkAttachment implements HolderAttachment {
 
     @Override
     public void destroy() {
+        if (this.removed) return;
+        this.removed = true;
+
+        ((HolderAttachmentHolder) chunk).polymerVE$removeHolder(this);
         if (this.holder.getAttachment() == this) {
             this.holder.setAttachment(null);
         }
-        ((HolderAttachmentHolder) chunk).polymerVE$removeHolder(this);
     }
 
     @Override
     public void tick() {
+        if (this.removed) return;
         if (this.autoTick) {
             this.holder().tick();
         }
@@ -95,6 +101,8 @@ public class ChunkAttachment implements HolderAttachment {
 
     @Override
     public void updateCurrentlyTracking(Collection<ServerPlayNetworkHandler> currentlyTracking) {
+        if (this.removed || !((WorldChunkAccessor) chunk).isLoadedToWorld()) return;
+
         List<ServerPlayNetworkHandler> watching = new ArrayList<>();
 
         for (ServerPlayerEntity x : getPlayersWatchingChunk(chunk)) {
@@ -123,6 +131,7 @@ public class ChunkAttachment implements HolderAttachment {
 
     @Override
     public void updateTracking(ServerPlayNetworkHandler tracking) {
+        if (this.removed) return;
         if (tracking.player.isDead() || !VirtualEntityUtils.isPlayerTracking(tracking.getPlayer(), this.chunk)) {
             this.stopWatching(tracking);
         }
@@ -140,5 +149,10 @@ public class ChunkAttachment implements HolderAttachment {
 
     public WorldChunk getChunk() {
         return this.chunk;
+    }
+
+    @Override
+    public boolean isRemoved() {
+        return this.removed;
     }
 }

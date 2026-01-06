@@ -10,7 +10,6 @@ import net.minecraft.client.render.entity.EntityRendererFactory;
 import net.minecraft.client.render.entity.state.EntityRenderState;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.entity.Entity;
-import net.minecraft.text.Text;
 
 @Environment(EnvType.CLIENT)
 public class NullEntityRenderer extends EmptyEntityRenderer<Entity> {
@@ -20,13 +19,17 @@ public class NullEntityRenderer extends EmptyEntityRenderer<Entity> {
         super(new EntityRendererFactory.Context(null, null, null, null, null, null, null, null));
     }
 
+    public NullEntityRenderer(EntityRendererFactory.Context context) {
+        super(context);
+    }
+
     @Override
     public boolean shouldRender(Entity entity, Frustum frustum, double x, double y, double z) {
-        return false;
+        return true;
     }
 
     @Override
     public void render(EntityRenderState state, MatrixStack matrices, VertexConsumerProvider vertexConsumers, int light) {
-
+        super.render(state, matrices, vertexConsumers, light);
     }
 }

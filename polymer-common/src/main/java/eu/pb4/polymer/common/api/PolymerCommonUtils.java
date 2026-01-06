@@ -5,16 +5,18 @@ import eu.pb4.polymer.common.api.events.SimpleEvent;
 import eu.pb4.polymer.common.impl.*;
 import eu.pb4.polymer.common.impl.client.ClientUtils;
 import eu.pb4.polymer.common.impl.compat.FloodGateUtils;
+import eu.pb4.polymer.common.impl.compat.ViaVersionUtils;
 import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.SharedConstants;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.network.listener.PacketListener;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerCommonNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Unit;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 import xyz.nucleoid.packettweaker.PacketContext;
+import xyz.nucleoid.packettweaker.impl.MutableContext;
 
 import java.io.InputStream;
 import java.net.URL;
@@ -23,19 +25,17 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
-import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public final class PolymerCommonUtils {
-    private static final ThreadLocal<LogicOverride> FORCE_NETWORKING = ThreadLocal.withInitial(() -> LogicOverride.DEFAULT);
-
-    private PolymerCommonUtils() {}
-
     public static final SimpleEvent<ResourcePackChangeCallback> ON_RESOURCE_PACK_STATUS_CHANGE = new SimpleEvent<>();
-    private static Path cachedClientPath;
-    private final static String SAFE_CLIENT_SHA1 = "a7e5a6024bfd3cd614625aa05629adf760020304";
+    private static final ThreadLocal<LogicOverride> FORCE_NETWORKING = ThreadLocal.withInitial(() -> LogicOverride.DEFAULT);
+    private final static String SAFE_CLIENT_SHA1 = "a2db1ea98c37b2d00c83f6867fb8bb581a593e07";
     private final static String SAFE_CLIENT_URL = "https://piston-data.mojang.com/v1/objects/" + SAFE_CLIENT_SHA1 + "/client.jar";
+    private static Path cachedClientPath;
     private static Path cachedClientJarRoot;
+    private PolymerCommonUtils() {
+    }
 
     @Nullable
     public static Path getClientJarRoot() {
@@ -167,13 +167,46 @@ public final class PolymerCommonUtils {
         }
     }
 
+    public static ScopedOverride executeWithNetworkingLogic() {
+        var val = FORCE_NETWORKING.get();
+        FORCE_NETWORKING.set(LogicOverride.TRUE);
+
+        return () -> FORCE_NETWORKING.set(val);
+    }
+
+    public static ScopedOverride executeWithNetworkingLogic(PacketListener listener) {
+        var val = FORCE_NETWORKING.get();
+        FORCE_NETWORKING.set(LogicOverride.TRUE);
+        var connection = MutableContext.get().getClientConnection();
+        var packet = MutableContext.get().getEncodedPacket();
+        MutableContext.get().set(listener, null);
+
+        return () -> {
+            MutableContext.get().set(connection, packet);
+            FORCE_NETWORKING.set(val);
+        };
+    }
+
+    public static ScopedOverride executeWithoutNetworkingLogic() {
+        var val = FORCE_NETWORKING.get();
+        FORCE_NETWORKING.set(LogicOverride.FALSE);
+        var connection = MutableContext.get().getClientConnection();
+        var packet = MutableContext.get().getEncodedPacket();
+        MutableContext.get().clear();
+
+        return () -> {
+            MutableContext.get().set(connection, packet);
+            FORCE_NETWORKING.set(val);
+        };
+    }
+
 
     public static World getFakeWorld() {
         return FakeWorld.INSTANCE;
     }
 
     public static boolean isNetworkingThread() {
-       return FORCE_NETWORKING.get().value(Thread.currentThread().getName().startsWith("Netty"));
+        return FORCE_NETWORKING.get().value(Thread.currentThread().getName().startsWith("Netty"));
     }
 
     public static boolean isServerNetworkingThread() {
@@ -197,9 +230,20 @@ public final class PolymerCommonUtils {
 
     public static boolean isBedrockPlayer(GameProfile profile) {
         if (CompatStatus.FLOODGATE) {
-            return FloodGateUtils.isPlayerBroken(profile);
+            return FloodGateUtils.isPlayerBroken(profile.getId());
         }
         return false;
+    }
+
+    public static int getPlayerGameProtocol(ServerPlayerEntity player) {
+        return getPlayerGameProtocol(player.getGameProfile());
+    }
+
+    public static int getPlayerGameProtocol(GameProfile profile) {
+        if (CompatStatus.VIAVERSION) {
+            return ViaVersionUtils.getProtocol(profile.getId());
+        }
+        return SharedConstants.getGameVersion().getProtocolVersion();
     }
 
     public static boolean hasResourcePack(@Nullable ServerPlayerEntity player, UUID uuid) {
@@ -245,12 +289,12 @@ public final class PolymerCommonUtils {
     /**
      * Creates instance of object by using unsafe, bypassing initializers.
      * All of its fields will be set to null or similar.
-     *
+     * <p>
      * Useful for bad packet implementations™™
      *
      * @param clazz class to instantiate
+     * @param <T>   Anything you want
      * @return New instance
-     * @param <T> Anything you want
      */
     public static <T> T createUnsafe(Class<T> clazz) {
         return CommonImplUtils.createUnsafe(clazz);

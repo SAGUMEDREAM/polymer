@@ -1,7 +1,9 @@
 package eu.pb4.polymer.core.api.utils;
 
+import eu.pb4.polymer.core.impl.PolymerImplUtils;
+import eu.pb4.polymer.core.impl.interfaces.RegistryExtension;
+import eu.pb4.polymer.rsm.api.RegistrySyncUtils;
 import net.minecraft.registry.Registry;
-import net.minecraft.server.network.ServerPlayerEntity;
 import org.jetbrains.annotations.Nullable;
 import xyz.nucleoid.packettweaker.PacketContext;
 
@@ -10,14 +12,13 @@ import xyz.nucleoid.packettweaker.PacketContext;
  */
 
 public interface PolymerSyncedObject<T> extends PolymerObject {
-
     /**
      * Generic method to get polymer replacement sent to player
      *
      * @param context target context
      * @return a replacement. It shouldn't be a null unless specified otherwise
      */
-    T getPolymerReplacement(PacketContext context);
+    T getPolymerReplacement(T object, PacketContext context);
 
     /**
      * Allows to gate syncing of this object with clients running polymer
@@ -35,6 +36,34 @@ public interface PolymerSyncedObject<T> extends PolymerObject {
     }
 
     static <T> boolean canSyncRawToClient(Registry<T> registry, T obj, PacketContext context) {
-        return obj instanceof PolymerSyncedObject<?> pol ? pol.canSyncRawToClient(context) : !PolymerUtils.isServerOnly(registry, obj);
+        var pol = getSyncedObject(registry, obj);
+        return pol != null ? pol.canSyncRawToClient(context) : !PolymerUtils.isServerOnly(registry, obj);
+    }
+
+
+    static <T> void setSyncedObject(Registry<T> registry, T obj, PolymerSyncedObject<T> object) {
+        //noinspection unchecked
+        setPlainSyncedObject(registry, obj, object);
+        RegistrySyncUtils.setServerEntry(registry, obj);
+    }
+
+    static <T> void setPlainSyncedObject(Registry<T> registry, T obj, PolymerSyncedObject<T> object) {
+        //noinspection unchecked
+        ((RegistryExtension<T>) registry).polymer$setOverlay(obj, object);
+    }
+
+    @Nullable
+    static <T> PolymerSyncedObject<T> getSyncedObject(Registry<T> registry, T obj) {
+        if (obj instanceof PolymerSyncedObject<?> instance) {
+            //noinspection unchecked
+            return (PolymerSyncedObject<T>) instance;
+        }
+
+        return registry instanceof RegistryExtension<?> extension ? ((RegistryExtension<T>) extension).polymer$getOverlay(obj) : null;
+    }
+
+    static <T> boolean canSynchronizeToPolymerClient(Registry<T> registry, T entry, PacketContext.NotNullWithPlayer ctx) {
+        var obj = getSyncedObject(registry, entry);
+        return obj == null || obj.canSynchronizeToPolymerClient(ctx);
     }
 }

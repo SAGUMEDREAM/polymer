@@ -1,6 +1,8 @@
 package eu.pb4.polymer.autohost.impl;
 
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.serialization.JsonOps;
+import eu.pb4.polymer.autohost.api.AutoHostUtils;
 import eu.pb4.polymer.autohost.api.ResourcePackDataProvider;
 import eu.pb4.polymer.autohost.impl.providers.*;
 import eu.pb4.polymer.common.impl.CommonImpl;
@@ -12,9 +14,9 @@ import net.fabricmc.api.ModInitializer;
 import net.minecraft.network.packet.s2c.common.ResourcePackSendS2CPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.Text;
+import net.minecraft.text.TextCodecs;
 import net.minecraft.util.Identifier;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Supplier;
@@ -25,10 +27,15 @@ import static net.minecraft.server.command.CommandManager.literal;
 public class AutoHost implements ModInitializer {
     public static final Map<Identifier, Supplier<ResourcePackDataProvider>> TYPES = new HashMap<>();
     public static final List<MinecraftServer.ServerResourcePackProperties> GLOBAL_RESOURCE_PACKS = new ArrayList<>();
+    public static final Map<String, Path> FILES = new HashMap<>();
     public static AutoHostConfig config = new AutoHostConfig();
     public static Text message = Text.empty();
     public static Text disconnectMessage = Text.empty();
+    public static Text dialogTitle = Text.empty();
+    public static Text dialogDefaultBody = Text.empty();
     public static ResourcePackDataProvider provider = EmptyProvider.INSTANCE;
+
+    public static final String DEFAULT_PATH = AutoHostUtils.getPathFromId(AutoHostUtils.DEFAULT_PACK_ID);
 
     public static void init(MinecraftServer server) {
         var config = CommonImpl.loadConfig("auto-host", AutoHostConfig.class);
@@ -39,15 +46,27 @@ public class AutoHost implements ModInitializer {
         }
 
         try {
-            AutoHost.message = Text.Serialization.fromJsonTree(AutoHost.config.message, server.getRegistryManager());
+            AutoHost.message = TextCodecs.CODEC.decode(JsonOps.INSTANCE, AutoHost.config.message).getOrThrow().getFirst();
         } catch (Exception e) {
             AutoHost.message = null;
         }
 
         try {
-            AutoHost.disconnectMessage = Text.Serialization.fromJsonTree(AutoHost.config.disconnectMessage, server.getRegistryManager());
+            AutoHost.disconnectMessage = TextCodecs.CODEC.decode(JsonOps.INSTANCE, AutoHost.config.disconnectMessage).getOrThrow().getFirst();
         } catch (Exception e) {
             AutoHost.disconnectMessage = Text.literal("This server requires resource pack enabled to play!");
+        }
+
+        try {
+            AutoHost.dialogTitle = TextCodecs.CODEC.decode(JsonOps.INSTANCE, AutoHost.config.dialogTitle).getOrThrow().getFirst();
+        } catch (Exception e) {
+            AutoHost.dialogTitle = Text.literal("The server's resource pack is still generating");
+        }
+
+        try {
+            AutoHost.dialogDefaultBody = TextCodecs.CODEC.decode(JsonOps.INSTANCE, AutoHost.config.dialogDefaultBody).getOrThrow().getFirst();
+        } catch (Exception e) {
+            AutoHost.dialogDefaultBody = Text.literal("Waiting...");
         }
 
         var type = TYPES.get(Identifier.tryParse(config.type));
@@ -73,7 +92,6 @@ public class AutoHost implements ModInitializer {
             }
         }
 
-
         CommonImpl.saveConfig("auto-host", config);
 
         provider.serverStarted(server);
@@ -83,21 +101,28 @@ public class AutoHost implements ModInitializer {
         provider.serverStopped(server);
     }
 
-    public static File getFile(String path) {
-        var x = getPath(path);
-        return x != null ? x.toFile() : null;
-    }
-
     public static Path getPath(String path) {
-        if (path.equals("main.zip")) {
-            return PolymerResourcePackUtils.getMainPath();
+        var plus = path.indexOf('+');
+        if (plus != -1) {
+            path = path.substring(0, plus);
         }
 
-        return null;
+        if (path.equals(DEFAULT_PATH)) {
+            var mainPath = PolymerResourcePackUtils.getMainPath();
+            if (PolymerResourcePackMod.useMainPath) {
+                return mainPath;
+            }
+
+            return mainPath.resolveSibling(mainPath.getFileName().toString() + "_server.zip");
+        }
+
+        return FILES.get(path);
     }
 
     @Override
     public void onInitialize() {
+        CommonImpl.registerConfig("auto-host", AutoHostConfig.class);
+
         ResourcePackDataProvider.register(Identifier.of("polymer", "automatic"), NettyProvider::new);
         ResourcePackDataProvider.register(Identifier.of("polymer", "auto"), NettyProvider::new);
 

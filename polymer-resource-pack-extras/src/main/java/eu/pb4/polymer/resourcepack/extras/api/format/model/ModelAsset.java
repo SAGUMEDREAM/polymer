@@ -4,6 +4,7 @@ import com.google.gson.JsonParser;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.JsonOps;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import eu.pb4.polymer.common.impl.SortedMapCodec;
 import eu.pb4.polymer.resourcepack.api.WritableAsset;
 import net.minecraft.item.ModelTransformationMode;
 import net.minecraft.util.Identifier;
@@ -19,8 +20,8 @@ public record ModelAsset(Optional<Identifier> parent, Optional<List<ModelElement
     public static final Codec<ModelAsset> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Identifier.CODEC.optionalFieldOf("parent").forGetter(ModelAsset::parent),
             ModelElement.CODEC.listOf().optionalFieldOf("elements").forGetter(ModelAsset::elements),
-            Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("textures", Map.of()).forGetter(ModelAsset::textures),
-            Codec.unboundedMap(ModelTransformationMode.CODEC, ModelTransformation.CODEC).optionalFieldOf("display", Map.of()).forGetter(ModelAsset::display),
+            SortedMapCodec.of(Codec.STRING, Codec.STRING).optionalFieldOf("textures", Map.of()).forGetter(ModelAsset::textures),
+            SortedMapCodec.of(ModelTransformationMode.CODEC, ModelTransformation.CODEC).optionalFieldOf("display", Map.of()).forGetter(ModelAsset::display),
             GuiLight.CODEC.optionalFieldOf("gui_light").forGetter(ModelAsset::guiLight),
             Codec.BOOL.optionalFieldOf("ambientocclusion", true).forGetter(ModelAsset::ambientOcclusion)
     ).apply(instance, ModelAsset::new));
@@ -72,6 +73,11 @@ public record ModelAsset(Optional<Identifier> parent, Optional<List<ModelElement
 
         public Builder parent(Identifier parent) {
             this.parent = Optional.ofNullable(parent);
+            return this;
+        }
+
+        public Builder transformation(ModelTransformationMode context, ModelTransformation transformation) {
+            this.display.put(context, transformation);
             return this;
         }
 

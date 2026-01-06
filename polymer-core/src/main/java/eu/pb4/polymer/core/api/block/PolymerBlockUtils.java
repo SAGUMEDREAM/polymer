@@ -4,6 +4,7 @@ import eu.pb4.polymer.common.api.events.BooleanEvent;
 import eu.pb4.polymer.common.api.events.SimpleEvent;
 import eu.pb4.polymer.common.impl.CommonImplUtils;
 import eu.pb4.polymer.core.api.item.PolymerItem;
+import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
 import eu.pb4.polymer.core.impl.compat.polymc.PolyMcUtils;
 import eu.pb4.polymer.core.impl.interfaces.BlockStateExtra;
 import eu.pb4.polymer.core.impl.networking.PacketPatcher;
@@ -34,20 +35,19 @@ import java.util.function.Predicate;
 
 public final class PolymerBlockUtils {
     public static final int NESTED_DEFAULT_DISTANCE = 32;
-    public static final Predicate<BlockState> IS_POLYMER_BLOCK_STATE_PREDICATE = state -> state.getBlock() instanceof PolymerBlock;
+    public static final Predicate<BlockState> IS_POLYMER_BLOCK_STATE_PREDICATE = state -> PolymerSyncedObject.getSyncedObject(Registries.BLOCK, state.getBlock()) instanceof PolymerBlock;
     /**
      * This event allows you to force server side mining for any block/item
      */
     public static final BooleanEvent<MineEventListener> SERVER_SIDE_MINING_CHECK = new BooleanEvent<>();
     public static final SimpleEvent<BreakingProgressListener> BREAKING_PROGRESS_UPDATE = new SimpleEvent<>();
     public static final BooleanEvent<PolymerBlockInteractionListener> POLYMER_BLOCK_INTERACTION_CHECK = new BooleanEvent<>();
+    public static final BooleanEvent<PolymerIgnoreSoundExceptionListener> POLYMER_IGNORE_SOUND_EXCEPTED_ENTITY = new BooleanEvent<>();
     /**
      * This event allows you to force syncing of light updates between server and clinet
      */
     public static final BooleanEvent<BiPredicate<ServerWorld, ChunkSectionPos>> SEND_LIGHT_UPDATE_PACKET = new BooleanEvent<>();
     private static final NbtCompound STATIC_COMPOUND = new NbtCompound();
-    private static final Set<BlockEntityType<?>> BLOCK_ENTITY_TYPES = new ObjectOpenCustomHashSet<>(CommonImplUtils.IDENTITY_HASH);
-
     private PolymerBlockUtils() {
     }
 
@@ -57,11 +57,13 @@ public final class PolymerBlockUtils {
      * @param types BlockEntityTypes
      */
     public static void registerBlockEntity(BlockEntityType<?>... types) {
-        BLOCK_ENTITY_TYPES.addAll(Arrays.asList(types));
-
         for (var type : types) {
-            RegistrySyncUtils.setServerEntry(Registries.BLOCK_ENTITY_TYPE, type);
+            registerBlockEntity(type, (obj, ctx) -> null);
         }
+    }
+
+    public static void registerBlockEntity(BlockEntityType<?> type, PolymerSyncedObject<BlockEntityType<?>> syncedObject) {
+        PolymerSyncedObject.setSyncedObject(Registries.BLOCK_ENTITY_TYPE, type, syncedObject);
     }
 
     /**
@@ -70,7 +72,7 @@ public final class PolymerBlockUtils {
      * @param type BlockEntities type
      */
     public static boolean isPolymerBlockEntityType(BlockEntityType<?> type) {
-        return BLOCK_ENTITY_TYPES.contains(type);
+        return PolymerSyncedObject.getSyncedObject(Registries.BLOCK_ENTITY_TYPE, type) != null;
     }
 
     /**
@@ -80,7 +82,7 @@ public final class PolymerBlockUtils {
      * @return
      */
     public static boolean forceLightUpdates(BlockState blockState) {
-        if (blockState.getBlock() instanceof PolymerBlock virtualBlock) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.BLOCK, blockState.getBlock()) instanceof PolymerBlock virtualBlock) {
             if (virtualBlock.forceLightUpdates(blockState)) {
                 return true;
             }
@@ -105,6 +107,10 @@ public final class PolymerBlockUtils {
         return BlockMapper.getFrom(context.getPlayer()).toClientSideState(block.getDefaultState(), context).getBlock();
     }
 
+    public static void registerOverlay(Block block, PolymerBlock polymerBlock) {
+        PolymerBlock.registerOverlay(block, polymerBlock);
+    }
+
     /**
      * This method is minimal wrapper around {@link PolymerBlock#getPolymerBlockState(BlockState, PacketContext)} )} to make sure
      * It gets replaced if it represents other PolymerBlock
@@ -119,7 +125,7 @@ public final class PolymerBlockUtils {
         BlockState out = block.getPolymerBlockState(blockState, context);
 
         int req = 0;
-        while (out.getBlock() instanceof PolymerBlock newBlock && newBlock != block && req < maxDistance) {
+        while (PolymerSyncedObject.getSyncedObject(Registries.BLOCK, out.getBlock()) instanceof PolymerBlock newBlock && newBlock != block && req < maxDistance) {
             out = newBlock.getPolymerBlockState(out, context);
             req++;
         }
@@ -130,7 +136,7 @@ public final class PolymerBlockUtils {
         BlockState out = block.getPolymerBreakEventBlockState(blockState, context);
 
         int req = 0;
-        while (out.getBlock() instanceof PolymerBlock newBlock && newBlock != block && req < maxDistance) {
+        while (PolymerSyncedObject.getSyncedObject(Registries.BLOCK, out.getBlock()) instanceof PolymerBlock newBlock && newBlock != block && req < maxDistance) {
             out = newBlock.getPolymerBreakEventBlockState(blockState, context);
             req++;
         }
@@ -155,8 +161,8 @@ public final class PolymerBlockUtils {
     }
 
     public static boolean shouldMineServerSide(ServerPlayerEntity player, BlockPos pos, BlockState state) {
-        return (state.getBlock() instanceof PolymerBlock block && block.handleMiningOnServer(player.getMainHandStack(), state, pos, player))
-                || (player.getMainHandStack().getItem() instanceof PolymerItem item && item.handleMiningOnServer(player.getMainHandStack(), state, pos, player))
+        return (PolymerSyncedObject.getSyncedObject(Registries.BLOCK, state.getBlock()) instanceof PolymerBlock block && block.handleMiningOnServer(player.getMainHandStack(), state, pos, player))
+                || (PolymerSyncedObject.getSyncedObject(Registries.ITEM, player.getMainHandStack().getItem()) instanceof PolymerItem item && item.handleMiningOnServer(player.getMainHandStack(), state, pos, player))
                 || PolymerBlockUtils.SERVER_SIDE_MINING_CHECK.invoke((x) -> x.onBlockMine(state, pos, player));
     }
 
@@ -168,15 +174,27 @@ public final class PolymerBlockUtils {
         return PacketPatcher.transformBlockEntityNbt(context, type, original);
     }
 
-    public static boolean isPolymerBlockInteraction(ServerPlayerEntity player, ItemStack stack, Hand hand, BlockHitResult blockHitResult, ServerWorld world, ActionResult actionResult) {
+    public static boolean isPolymerBlockInteraction(ServerPlayerEntity player, ItemStack stack, Hand hand, BlockState preInteractionState, BlockHitResult blockHitResult, ServerWorld world, ActionResult actionResult) {
         var blockState = world.getBlockState(blockHitResult.getBlockPos());
-        if (blockState.getBlock() instanceof PolymerBlock polymerBlock && polymerBlock.isPolymerBlockInteraction(blockState, player, hand, stack, world, blockHitResult, actionResult)) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.BLOCK, blockState.getBlock()) instanceof PolymerBlock polymerBlock && polymerBlock.isPolymerBlockInteraction(blockState, player, hand, stack, world, blockHitResult, actionResult)) {
             return true;
-        } else if (stack.getItem() instanceof PolymerItem polymerItem && polymerItem.isPolymerBlockInteraction(blockState, player, hand, stack, world, blockHitResult, actionResult)) {
+        } else if (!blockState.isOf(preInteractionState.getBlock()) && PolymerSyncedObject.getSyncedObject(Registries.BLOCK, preInteractionState.getBlock()) instanceof PolymerBlock polymerBlock && polymerBlock.isPolymerBlockInteraction(preInteractionState, player, hand, stack, world, blockHitResult, actionResult)) {
+            return true;
+        } else if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, stack.getItem()) instanceof PolymerItem polymerItem && polymerItem.isPolymerBlockInteraction(blockState, player, hand, stack, world, blockHitResult, actionResult)) {
             return true;
         }
 
         return POLYMER_BLOCK_INTERACTION_CHECK.invoke(x -> x.isPolymerBlockInteraction(blockState, player, hand, stack, world, blockHitResult, actionResult));
+    }
+
+    public static boolean isIgnoringPlaySoundExceptedEntity(ServerPlayerEntity player, ItemStack stack, Hand hand, BlockState state, BlockHitResult blockHitResult, ServerWorld world) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.BLOCK, state.getBlock()) instanceof PolymerBlock polymerBlock && polymerBlock.isIgnoringBlockInteractionPlaySoundExceptedEntity(state, player, hand, stack, world, blockHitResult)) {
+            return true;
+        } else if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, stack.getItem()) instanceof PolymerItem polymerItem && polymerItem.isIgnoringBlockInteractionPlaySoundExceptedEntity(state, player, hand, stack, world, blockHitResult)) {
+            return true;
+        }
+
+        return POLYMER_IGNORE_SOUND_EXCEPTED_ENTITY.invoke(x -> x.isIgnoringBlockInteractionPlaySoundExceptedEntity(state, player, hand, stack, world, blockHitResult));
     }
 
     @FunctionalInterface
@@ -192,5 +210,10 @@ public final class PolymerBlockUtils {
     @FunctionalInterface
     public interface PolymerBlockInteractionListener {
         boolean isPolymerBlockInteraction(BlockState state, ServerPlayerEntity player, Hand hand, ItemStack stack, ServerWorld world, BlockHitResult blockHitResult, ActionResult actionResult);
+    }
+
+    @FunctionalInterface
+    public interface PolymerIgnoreSoundExceptionListener {
+        boolean isIgnoringBlockInteractionPlaySoundExceptedEntity(BlockState state, ServerPlayerEntity player, Hand hand, ItemStack stack, ServerWorld world, BlockHitResult blockHitResult);
     }
 }

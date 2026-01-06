@@ -3,6 +3,7 @@ package eu.pb4.polymer.core.impl.client.compat;
 import eu.pb4.polymer.core.api.client.ClientPolymerBlock;
 import eu.pb4.polymer.core.api.client.PolymerClientUtils;
 import eu.pb4.polymer.core.impl.PolymerImpl;
+import eu.pb4.polymer.core.impl.PolymerImplUtils;
 import eu.pb4.polymer.core.impl.client.InternalClientRegistry;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
@@ -13,12 +14,15 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
+import snownee.jade.addon.core.ModNameProvider;
 import snownee.jade.addon.debug.RegistryNameProvider;
 import snownee.jade.api.*;
 import snownee.jade.api.config.IPluginConfig;
 import snownee.jade.api.config.IWailaConfig;
 import snownee.jade.api.theme.IThemeHelper;
 import snownee.jade.api.ui.BoxStyle;
+import snownee.jade.api.ui.Element;
 import snownee.jade.api.ui.IElement;
 import snownee.jade.api.ui.IElementHelper;
 import snownee.jade.impl.ui.ItemStackElement;
@@ -34,7 +38,7 @@ public class JadeCompatibility implements IWailaPlugin {
             registrar.registerBlockComponent(BlockOverride.INSTANCE, Block.class);
             registrar.registerEntityComponent(EntityOverride.INSTANCE, Entity.class);
 
-            registrar.addItemModNameCallback(CompatUtils::getModName);
+            registrar.addItemModNameCallback(PolymerImplUtils::getModName);
         }
     }
 
@@ -44,7 +48,7 @@ public class JadeCompatibility implements IWailaPlugin {
         private static final Identifier ID = Identifier.tryParse("polymer:blockstate");
 
         @Override
-        public IElement getIcon(BlockAccessor accessor, snownee.jade.api.config.IPluginConfig config, IElement currentIcon) {
+        public @Nullable IElement getIcon(BlockAccessor accessor, IPluginConfig config, IElement currentIcon) {
             try {
                 var block = InternalClientRegistry.getBlockAt(accessor.getPosition());
                 if (block != ClientPolymerBlock.NONE_STATE) {
@@ -111,6 +115,7 @@ public class JadeCompatibility implements IWailaPlugin {
                     }
                 } catch (Throwable e) {
                 }
+
                 try {
 
                     if (config.get(JadeIds.CORE_MOD_NAME)) {
@@ -123,7 +128,6 @@ public class JadeCompatibility implements IWailaPlugin {
                     }
                 } catch (Throwable e) {
                 }
-
             }
             } catch (Throwable e) {
 
@@ -170,7 +174,7 @@ public class JadeCompatibility implements IWailaPlugin {
 
                     var formatting = IWailaConfig.get().formatting();
 
-                    RegistryNameProvider.Mode mode = config.getEnum(JadeIds.DEBUG_REGISTRY_NAME);
+                    var mode = config.getEnum(JadeIds.DEBUG_REGISTRY_NAME);
                     try {
 
                         if (mode != RegistryNameProvider.Mode.OFF) {
@@ -180,6 +184,7 @@ public class JadeCompatibility implements IWailaPlugin {
                         }
                     } catch (Throwable e) {
                     }
+
                     try {
                         if (config.get(JadeIds.CORE_MOD_NAME)) {
                             String modName = ModIdentification.getModName(type.identifier());

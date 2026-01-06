@@ -1,9 +1,11 @@
 package eu.pb4.polymer.core.api.block;
 
 import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
+import eu.pb4.polymer.rsm.api.RegistrySyncUtils;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.item.ItemStack;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
@@ -55,8 +57,8 @@ public interface PolymerBlock extends PolymerSyncedObject<Block> {
     }
 
     @Override
-    default Block getPolymerReplacement(PacketContext context) {
-        return PolymerBlockUtils.getPolymerBlock((Block) this, context);
+    default Block getPolymerReplacement(Block block, PacketContext context) {
+        return PolymerBlockUtils.getPolymerBlock(block, context);
     }
 
     default boolean handleMiningOnServer(ItemStack tool, BlockState state, BlockPos pos, ServerPlayerEntity player) {
@@ -65,5 +67,18 @@ public interface PolymerBlock extends PolymerSyncedObject<Block> {
 
     default boolean isPolymerBlockInteraction(BlockState state, ServerPlayerEntity player, Hand hand, ItemStack stack, ServerWorld world, BlockHitResult blockHitResult, ActionResult actionResult) {
         return true;
+    }
+
+    default boolean isIgnoringBlockInteractionPlaySoundExceptedEntity(BlockState state, ServerPlayerEntity player, Hand hand, ItemStack stack, ServerWorld world, BlockHitResult blockHitResult) {
+        return false;
+    }
+
+    default boolean playSoundToSelf(BlockState state, ServerPlayerEntity player, ServerWorld world, BlockPos pos) {
+        return false;
+    }
+
+    static void registerOverlay(Block block, PolymerBlock polymerBlock) {
+        PolymerSyncedObject.setSyncedObject(Registries.BLOCK, block, polymerBlock);
+        RegistrySyncUtils.setServerEntry(Registries.BLOCK, block);
     }
 }

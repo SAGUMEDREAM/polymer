@@ -18,12 +18,20 @@ public class EntityAttachment implements HolderAttachment {
     private final ElementHolder holder;
     private final boolean autoTick;
 
+    private boolean removed = false;
+
     public EntityAttachment(ElementHolder holder, Entity entity, boolean autoTick) {
         this.entity = entity;
         this.holder = holder;
-        ((HolderAttachmentHolder) entity).polymerVE$addHolder(this);
         this.autoTick = autoTick;
+        if (this.getClass() == EntityAttachment.class) {
+            this.attach();
+        }
+    }
+
+    protected void attach() {
         this.holder.setAttachment(this);
+        ((HolderAttachmentHolder) entity).polymerVE$addHolder(this);
     }
 
     public static EntityAttachment of(ElementHolder holder, Entity entity) {
@@ -41,6 +49,9 @@ public class EntityAttachment implements HolderAttachment {
 
     @Override
     public void destroy() {
+        if (this.removed) return;
+        this.removed = true;
+
         ((HolderAttachmentHolder) entity).polymerVE$removeHolder(this);
         if (this.holder.getAttachment() == this) {
             this.holder.setAttachment(null);
@@ -49,6 +60,8 @@ public class EntityAttachment implements HolderAttachment {
 
     @Override
     public void tick() {
+        if (this.removed) return;
+
         if (this.autoTick) {
             this.holder.tick();
         }
@@ -56,6 +69,8 @@ public class EntityAttachment implements HolderAttachment {
 
     @Override
     public void updateCurrentlyTracking(Collection<ServerPlayNetworkHandler> currentlyTracking) {
+        if (this.removed) return;
+
         if (this.holder.getAttachment() != this) {
             return;
         }
@@ -84,7 +99,7 @@ public class EntityAttachment implements HolderAttachment {
 
     @Override
     public boolean canUpdatePosition() {
-        return !this.entity.isRemoved() && this.entity.getWorld().getEntityById(this.entity.getId()) == this.entity;
+        return !this.removed && !this.entity.isRemoved() && this.entity.getWorld().getEntityById(this.entity.getId()) == this.entity;
     }
 
     @Override
@@ -110,5 +125,10 @@ public class EntityAttachment implements HolderAttachment {
     @Override
     public boolean shouldTick() {
         return this.autoTick;
+    }
+
+    @Override
+    public boolean isRemoved() {
+        return this.removed;
     }
 }

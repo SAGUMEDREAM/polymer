@@ -3,10 +3,13 @@ package eu.pb4.polymer.autohost.impl.providers;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import eu.pb4.polymer.autohost.api.AutoHostUtils;
 import eu.pb4.polymer.autohost.api.ResourcePackDataProvider;
 import net.minecraft.network.ClientConnection;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.Util;
+import xyz.nucleoid.packettweaker.PacketContext;
 
 import java.util.Collection;
 import java.util.List;
@@ -43,5 +46,15 @@ public record EmptyProvider() implements ResourcePackDataProvider {
     @Override
     public Collection<MinecraftServer.ServerResourcePackProperties> getProperties(ClientConnection connection) {
         return List.of();
+    }
+
+    @Override
+    public String getMainFilePath(PacketContext context) {
+        return getFilePath(context, AutoHostUtils.DEFAULT_PACK_ID);
+    }
+
+    @Override
+    public String getFilePath(PacketContext context, Identifier identifier) {
+        return AutoHostUtils.getPathFromId(identifier);
     }
 }

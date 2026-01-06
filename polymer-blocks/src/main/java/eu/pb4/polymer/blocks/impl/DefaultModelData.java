@@ -3,13 +3,13 @@ package eu.pb4.polymer.blocks.impl;
 import eu.pb4.polymer.blocks.api.BlockModelType;
 import eu.pb4.polymer.blocks.api.PolymerBlockModel;
 import eu.pb4.polymer.core.impl.PolymerImpl;
-import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
 import net.minecraft.block.*;
 import net.minecraft.block.enums.*;
 import net.minecraft.registry.Registries;
 import net.minecraft.state.property.Properties;
 import net.minecraft.util.Identifier;
+import net.minecraft.util.Pair;
 import net.minecraft.util.math.Direction;
 
 import java.util.*;
@@ -24,7 +24,7 @@ public class DefaultModelData {
     private static final Predicate<BlockState> NOT_WATERLOGGED_PREDICATE = (state -> !(state.getBlock() instanceof Waterloggable && state.get(Properties.WATERLOGGED)));
 
     static {
-        generateDefault(BlockModelType.FULL_BLOCK, Blocks.NOTE_BLOCK);
+        generateDefault(BlockModelType.FULL_BLOCK, Blocks.NOTE_BLOCK, Blocks.TARGET);
         generateDefault(BlockModelType.BIOME_TRANSPARENT_BLOCK, NOT_WATERLOGGED_PREDICATE, Blocks.OAK_LEAVES, Blocks.SPRUCE_LEAVES, Blocks.JUNGLE_LEAVES, Blocks.ACACIA_LEAVES, Blocks.DARK_OAK_LEAVES, Blocks.MANGROVE_LEAVES);
         generateDefault(BlockModelType.BIOME_TRANSPARENT_BLOCK_WATERLOGGED, WATERLOGGED_PREDICATE, Blocks.OAK_LEAVES, Blocks.JUNGLE_LEAVES, Blocks.ACACIA_LEAVES, Blocks.DARK_OAK_LEAVES, Blocks.MANGROVE_LEAVES);
         generateDefault(BlockModelType.TRANSPARENT_BLOCK, NOT_WATERLOGGED_PREDICATE, Blocks.AZALEA_LEAVES, Blocks.FLOWERING_AZALEA_LEAVES, Blocks.BIRCH_LEAVES, Blocks.SPRUCE_LEAVES);
@@ -51,7 +51,7 @@ public class DefaultModelData {
         {
             var vines = new ReferenceArrayList<BlockState>();
 
-            for (var block : new Block[]{Blocks.TWISTING_VINES, Blocks.WEEPING_VINES}) {
+            for (var block : new Block[]{ Blocks.TWISTING_VINES, Blocks.WEEPING_VINES }) {
                 var id = Registries.BLOCK.getId(block);
                 var model = new PolymerBlockModel[]{PolymerBlockModel.of(Identifier.of(id.getNamespace() + ":block/" + id.getPath()))};
                 for (var state : block.getStateManager().getStates()) {
@@ -117,6 +117,24 @@ public class DefaultModelData {
         }
 
         {
+            var states = new ReferenceArrayList<BlockState>();
+
+            for (var block : new Block[]{ Blocks.HEAVY_WEIGHTED_PRESSURE_PLATE, Blocks.LIGHT_WEIGHTED_PRESSURE_PLATE }) {
+                var defaultState = block.getDefaultState();
+                var firstState = block.getDefaultState().with(WeightedPressurePlateBlock.POWER, 1);
+                for (int i = 2; i <= 15; i++) {
+                    SPECIAL_REMAPS.put(defaultState.with(WeightedPressurePlateBlock.POWER, i), firstState);
+                }
+
+                states.addAll(block.getStateManager().getStates());
+                states.remove(defaultState);
+                states.remove(firstState);
+            }
+
+            USABLE_STATES.put(BlockModelType.ACTIVE_PRESSURE_PLATE, states);
+        }
+
+        {
             addDisarmedTripwire(false, BlockModelType.TRIPWIRE_BLOCK);
             addDisarmedTripwire(true, BlockModelType.TRIPWIRE_BLOCK_FLAT);
 
@@ -124,6 +142,79 @@ public class DefaultModelData {
             addSlabs(SlabType.TOP, true, BlockModelType.TOP_SLAB_WATERLOGGED);
             addSlabs(SlabType.BOTTOM, false, BlockModelType.BOTTOM_SLAB);
             addSlabs(SlabType.BOTTOM, true, BlockModelType.BOTTOM_SLAB_WATERLOGGED);
+
+            var fullSlabs = List.<Pair<Block, Block>>of(
+                    new Pair<>(Blocks.RESIN_BRICK_SLAB, Blocks.RESIN_BRICKS),
+                    new Pair<>(Blocks.PRISMARINE_SLAB, Blocks.PRISMARINE),
+                    new Pair<>(Blocks.PRISMARINE_BRICK_SLAB, Blocks.PRISMARINE_BRICKS),
+                    new Pair<>(Blocks.DARK_PRISMARINE_SLAB, Blocks.DARK_PRISMARINE),
+                    new Pair<>(Blocks.OAK_SLAB, Blocks.OAK_PLANKS),
+                    new Pair<>(Blocks.SPRUCE_SLAB, Blocks.SPRUCE_PLANKS),
+                    new Pair<>(Blocks.BIRCH_SLAB, Blocks.BIRCH_PLANKS),
+                    new Pair<>(Blocks.JUNGLE_SLAB, Blocks.JUNGLE_PLANKS),
+                    new Pair<>(Blocks.ACACIA_SLAB, Blocks.ACACIA_PLANKS),
+                    new Pair<>(Blocks.CHERRY_SLAB, Blocks.CHERRY_PLANKS),
+                    new Pair<>(Blocks.DARK_OAK_SLAB, Blocks.DARK_OAK_PLANKS),
+                    new Pair<>(Blocks.PALE_OAK_SLAB, Blocks.PALE_OAK_PLANKS),
+                    new Pair<>(Blocks.MANGROVE_SLAB, Blocks.MANGROVE_PLANKS),
+                    new Pair<>(Blocks.BAMBOO_SLAB, Blocks.BAMBOO_PLANKS),
+                    new Pair<>(Blocks.BAMBOO_MOSAIC_SLAB, Blocks.BAMBOO_MOSAIC),
+                    new Pair<>(Blocks.STONE_SLAB, Blocks.STONE),
+                    new Pair<>(Blocks.SANDSTONE_SLAB, Blocks.SANDSTONE),
+                    new Pair<>(Blocks.CUT_SANDSTONE_SLAB, Blocks.CUT_SANDSTONE),
+                    new Pair<>(Blocks.PETRIFIED_OAK_SLAB, Blocks.OAK_PLANKS),
+                    new Pair<>(Blocks.COBBLESTONE_SLAB, Blocks.COBBLESTONE),
+                    new Pair<>(Blocks.BRICK_SLAB, Blocks.BRICKS),
+                    new Pair<>(Blocks.STONE_BRICK_SLAB, Blocks.STONE_BRICKS),
+                    new Pair<>(Blocks.MUD_BRICK_SLAB, Blocks.MUD_BRICKS),
+                    new Pair<>(Blocks.NETHER_BRICK_SLAB, Blocks.NETHER_BRICKS),
+                    new Pair<>(Blocks.QUARTZ_SLAB, Blocks.QUARTZ_BLOCK),
+                    new Pair<>(Blocks.RED_SANDSTONE_SLAB, Blocks.RED_SANDSTONE),
+                    new Pair<>(Blocks.CUT_RED_SANDSTONE_SLAB, Blocks.CUT_RED_SANDSTONE),
+                    new Pair<>(Blocks.PURPUR_SLAB, Blocks.PURPUR_BLOCK),
+                    new Pair<>(Blocks.POLISHED_GRANITE_SLAB, Blocks.POLISHED_GRANITE),
+                    new Pair<>(Blocks.SMOOTH_RED_SANDSTONE_SLAB, Blocks.SMOOTH_RED_SANDSTONE),
+                    new Pair<>(Blocks.MOSSY_STONE_BRICK_SLAB, Blocks.MOSSY_STONE_BRICKS),
+                    new Pair<>(Blocks.POLISHED_DIORITE_SLAB, Blocks.POLISHED_DIORITE),
+                    new Pair<>(Blocks.MOSSY_COBBLESTONE_SLAB, Blocks.MOSSY_COBBLESTONE),
+                    new Pair<>(Blocks.END_STONE_BRICK_SLAB, Blocks.END_STONE_BRICKS),
+                    new Pair<>(Blocks.SMOOTH_SANDSTONE_SLAB, Blocks.SMOOTH_SANDSTONE),
+                    new Pair<>(Blocks.SMOOTH_QUARTZ_SLAB, Blocks.SMOOTH_QUARTZ),
+                    new Pair<>(Blocks.GRANITE_SLAB, Blocks.GRANITE),
+                    new Pair<>(Blocks.ANDESITE_SLAB, Blocks.ANDESITE),
+                    new Pair<>(Blocks.RED_NETHER_BRICK_SLAB, Blocks.RED_NETHER_BRICKS),
+                    new Pair<>(Blocks.POLISHED_ANDESITE_SLAB, Blocks.POLISHED_ANDESITE),
+                    new Pair<>(Blocks.DIORITE_SLAB, Blocks.DIORITE),
+                    new Pair<>(Blocks.CRIMSON_SLAB, Blocks.CRIMSON_PLANKS),
+                    new Pair<>(Blocks.WARPED_SLAB, Blocks.WARPED_PLANKS),
+                    new Pair<>(Blocks.BLACKSTONE_SLAB, Blocks.BLACKSTONE),
+                    new Pair<>(Blocks.POLISHED_BLACKSTONE_BRICK_SLAB, Blocks.POLISHED_BLACKSTONE_BRICKS),
+                    new Pair<>(Blocks.POLISHED_BLACKSTONE_SLAB, Blocks.POLISHED_BLACKSTONE),
+                    new Pair<>(Blocks.TUFF_SLAB, Blocks.TUFF),
+                    new Pair<>(Blocks.POLISHED_TUFF_SLAB, Blocks.POLISHED_TUFF),
+                    new Pair<>(Blocks.TUFF_BRICK_SLAB, Blocks.TUFF_BRICKS),
+                    new Pair<>(Blocks.OXIDIZED_CUT_COPPER_SLAB, Blocks.OXIDIZED_CUT_COPPER),
+                    new Pair<>(Blocks.WEATHERED_CUT_COPPER_SLAB, Blocks.WEATHERED_CUT_COPPER),
+                    new Pair<>(Blocks.EXPOSED_CUT_COPPER_SLAB, Blocks.EXPOSED_CUT_COPPER),
+                    new Pair<>(Blocks.CUT_COPPER_SLAB, Blocks.CUT_COPPER),
+                    new Pair<>(Blocks.WAXED_OXIDIZED_CUT_COPPER_SLAB, Blocks.WAXED_OXIDIZED_CUT_COPPER),
+                    new Pair<>(Blocks.WAXED_WEATHERED_CUT_COPPER_SLAB, Blocks.WAXED_WEATHERED_CUT_COPPER),
+                    new Pair<>(Blocks.WAXED_EXPOSED_CUT_COPPER_SLAB, Blocks.WAXED_EXPOSED_CUT_COPPER),
+                    new Pair<>(Blocks.WAXED_CUT_COPPER_SLAB, Blocks.WAXED_CUT_COPPER),
+                    new Pair<>(Blocks.COBBLED_DEEPSLATE_SLAB, Blocks.COBBLED_DEEPSLATE),
+                    new Pair<>(Blocks.POLISHED_DEEPSLATE_SLAB, Blocks.POLISHED_DEEPSLATE),
+                    new Pair<>(Blocks.DEEPSLATE_TILE_SLAB, Blocks.DEEPSLATE_TILES),
+                    new Pair<>(Blocks.DEEPSLATE_BRICK_SLAB, Blocks.DEEPSLATE_BRICKS)
+            );
+
+            var fullRefs = USABLE_STATES.get(BlockModelType.FULL_BLOCK);
+            for (var pair : fullSlabs) {
+                addSlab(SlabType.DOUBLE, false, pair.getRight(), pair.getLeft(), fullRefs);
+            }
+
+            for (var pair : fullSlabs) {
+                addSlab(SlabType.DOUBLE, true, pair.getRight(), pair.getLeft(), fullRefs);
+            }
         }
 
         {
@@ -222,14 +313,37 @@ public class DefaultModelData {
         {
             {
                 List<BlockState> list = new ReferenceArrayList<>();
-                addSculkBlocks(false, list);
+                addSculkBlocks(false, false, list);
                 DefaultModelData.USABLE_STATES.put(BlockModelType.SCULK_SENSOR_BLOCK, list);
             }
             {
                 List<BlockState> list = new ReferenceArrayList<>();
-                addSculkBlocks(true, list);
+                addSculkBlocks(true, false, list);
                 DefaultModelData.USABLE_STATES.put(BlockModelType.SCULK_SENSOR_BLOCK_WATERLOGGED, list);
             }
+            {
+                List<BlockState> list = new ReferenceArrayList<>();
+                addSculkBlocks(false, true, list);
+                DefaultModelData.USABLE_STATES.put(BlockModelType.ACTIVE_SCULK_SENSOR_BLOCK, list);
+            }
+            {
+                List<BlockState> list = new ReferenceArrayList<>();
+                addSculkBlocks(true, true, list);
+                DefaultModelData.USABLE_STATES.put(BlockModelType.ACTIVE_SCULK_SENSOR_BLOCK_WATERLOGGED, list);
+            }
+        }
+
+        {
+            addScaffolding(false, false, BlockModelType.TOP_SCAFFOLDING);
+            addScaffolding(true, false, BlockModelType.BOTTOM_SCAFFOLDING);
+            addScaffolding(false, true, BlockModelType.TOP_SCAFFOLDING_WATERLOGGED);
+            addScaffolding(true, true, BlockModelType.BOTTOM_SCAFFOLDING_WATERLOGGED);
+        }
+        {
+            addFenceGates(Blocks.ACACIA_FENCE_GATE, Blocks.BAMBOO_FENCE_GATE, Blocks.BIRCH_FENCE_GATE,
+                Blocks.CHERRY_FENCE_GATE, Blocks.CRIMSON_FENCE_GATE, Blocks.DARK_OAK_FENCE_GATE,
+                Blocks.JUNGLE_FENCE_GATE, Blocks.MANGROVE_FENCE_GATE, Blocks.OAK_FENCE_GATE,
+                Blocks.PALE_OAK_FENCE_GATE, Blocks.SPRUCE_FENCE_GATE, Blocks.WARPED_FENCE_GATE);
         }
 
         if (false && PolymerImpl.DEV_ENV) {
@@ -241,30 +355,30 @@ public class DefaultModelData {
         }
     }
 
-    private static void addSculkBlocks(boolean waterlogged, List<BlockState> list) {
-        for (SculkSensorPhase phase : SculkSensorPhase.values()) {
-            if (phase == SculkSensorPhase.ACTIVE) continue;
+    private static void addSculkBlocks(boolean waterlogged, boolean active, List<BlockState> list) {
+        for (var phase : SculkSensorPhase.values()) {
+            if ((phase == SculkSensorPhase.ACTIVE) != active) continue;
             for (int i = 1; i <= 15; i++) {
-                BlockState defaultState = Blocks.SCULK_SENSOR.getDefaultState().with(SculkSensorBlock.SCULK_SENSOR_PHASE, phase).with(SculkSensorBlock.WATERLOGGED, waterlogged);
-                BlockState from = defaultState.with(SculkSensorBlock.POWER, i);
+                var defaultState = Blocks.SCULK_SENSOR.getDefaultState().with(SculkSensorBlock.SCULK_SENSOR_PHASE, phase).with(SculkSensorBlock.WATERLOGGED, waterlogged);
+                var from = defaultState.with(SculkSensorBlock.POWER, i);
                 list.add(from);
                 DefaultModelData.SPECIAL_REMAPS.put(from, defaultState);
             }
         }
 
-        Direction[] facingDirs = new Direction[]{
+        var facingDirs = new Direction[]{
                 Direction.NORTH,
                 Direction.EAST,
                 Direction.SOUTH,
                 Direction.WEST
         };
 
-        for (Direction direction : facingDirs) {
-            for (SculkSensorPhase phase : SculkSensorPhase.values()) {
-                if (phase == SculkSensorPhase.ACTIVE) continue;
+        for (var direction : facingDirs) {
+            for (var phase : SculkSensorPhase.values()) {
+                if ((phase == SculkSensorPhase.ACTIVE) != active) continue;
                 for (int i = 1; i <= 15; i++) {
-                    BlockState defaultState = Blocks.CALIBRATED_SCULK_SENSOR.getDefaultState().with(SculkSensorBlock.SCULK_SENSOR_PHASE, phase).with(SculkSensorBlock.WATERLOGGED, waterlogged).with(CalibratedSculkSensorBlock.FACING, direction);
-                    BlockState from = defaultState.with(SculkSensorBlock.POWER, i);
+                    var defaultState = Blocks.CALIBRATED_SCULK_SENSOR.getDefaultState().with(SculkSensorBlock.SCULK_SENSOR_PHASE, phase).with(SculkSensorBlock.WATERLOGGED, waterlogged).with(CalibratedSculkSensorBlock.FACING, direction);
+                    var from = defaultState.with(SculkSensorBlock.POWER, i);
                     list.add(from);
                     DefaultModelData.SPECIAL_REMAPS.put(from, defaultState);
                 }
@@ -291,12 +405,12 @@ public class DefaultModelData {
         list.add(addSinglePoweredDoor(Blocks.WARPED_DOOR, Blocks.WARPED_DOOR, direction, doorHinge, doubleBlockHalf, open));
         list.add(addSinglePoweredDoor(Blocks.PALE_OAK_DOOR, Blocks.PALE_OAK_DOOR, direction, doorHinge, doubleBlockHalf, open));
 
-        list.add(addSinglePoweredDoor(Blocks.IRON_DOOR, Blocks.IRON_DOOR, direction, doorHinge, doubleBlockHalf, open));
-
         list.add(addSinglePoweredDoor(Blocks.WAXED_COPPER_DOOR, Blocks.WAXED_COPPER_DOOR, direction, doorHinge, doubleBlockHalf, open));
         list.add(addSinglePoweredDoor(Blocks.WAXED_WEATHERED_COPPER_DOOR, Blocks.WAXED_WEATHERED_COPPER_DOOR, direction, doorHinge, doubleBlockHalf, open));
         list.add(addSinglePoweredDoor(Blocks.WAXED_EXPOSED_COPPER_DOOR, Blocks.WAXED_EXPOSED_COPPER_DOOR, direction, doorHinge, doubleBlockHalf, open));
         list.add(addSinglePoweredDoor(Blocks.WAXED_OXIDIZED_COPPER_DOOR, Blocks.WAXED_OXIDIZED_COPPER_DOOR, direction, doorHinge, doubleBlockHalf, open));
+
+        list.add(addSinglePoweredDoor(Blocks.IRON_DOOR, Blocks.IRON_DOOR, direction, doorHinge, doubleBlockHalf, open));
     }
 
     private static BlockState addSinglePoweredDoor(Block block, Block replacement, Direction facing, DoorHinge hinge, DoubleBlockHalf half, boolean open) {
@@ -333,12 +447,12 @@ public class DefaultModelData {
         list.add(addSinglePoweredClosedTrapdoor(Blocks.WARPED_TRAPDOOR, facing, half, waterlogged));
         list.add(addSinglePoweredClosedTrapdoor(Blocks.PALE_OAK_TRAPDOOR, facing, half, waterlogged));
 
-        list.add(addSinglePoweredClosedTrapdoor(Blocks.IRON_TRAPDOOR, facing, half, waterlogged));
-
         list.add(addSinglePoweredClosedTrapdoor(Blocks.WAXED_COPPER_TRAPDOOR, facing, half, waterlogged));
         list.add(addSinglePoweredClosedTrapdoor(Blocks.WAXED_EXPOSED_COPPER_TRAPDOOR, facing, half, waterlogged));
         list.add(addSinglePoweredClosedTrapdoor(Blocks.WAXED_WEATHERED_COPPER_TRAPDOOR, facing, half, waterlogged));
         list.add(addSinglePoweredClosedTrapdoor(Blocks.WAXED_OXIDIZED_COPPER_TRAPDOOR, facing, half, waterlogged));
+
+        list.add(addSinglePoweredClosedTrapdoor(Blocks.IRON_TRAPDOOR, facing, half, waterlogged));
 
         DefaultModelData.USABLE_STATES.put(modelType, list);
     }
@@ -364,12 +478,12 @@ public class DefaultModelData {
         list.add(addSinglePoweredOpenTrapdoor(Blocks.WARPED_TRAPDOOR, facing, half, waterlogged));
         list.add(addSinglePoweredOpenTrapdoor(Blocks.PALE_OAK_TRAPDOOR, facing, half, waterlogged));
 
-        list.add(addSinglePoweredOpenTrapdoor(Blocks.IRON_TRAPDOOR, facing, half, waterlogged));
-
         list.add(addSinglePoweredOpenTrapdoor(Blocks.WAXED_COPPER_TRAPDOOR, facing, half, waterlogged));
         list.add(addSinglePoweredOpenTrapdoor(Blocks.WAXED_EXPOSED_COPPER_TRAPDOOR, facing, half, waterlogged));
         list.add(addSinglePoweredOpenTrapdoor(Blocks.WAXED_WEATHERED_COPPER_TRAPDOOR, facing, half, waterlogged));
         list.add(addSinglePoweredOpenTrapdoor(Blocks.WAXED_OXIDIZED_COPPER_TRAPDOOR, facing, half, waterlogged));
+
+        list.add(addSinglePoweredOpenTrapdoor(Blocks.IRON_TRAPDOOR, facing, half, waterlogged));
 
         DefaultModelData.USABLE_STATES.put(modelType, list);
     }
@@ -405,16 +519,17 @@ public class DefaultModelData {
     private static void addSlabs(SlabType slabType, boolean waterlogged, BlockModelType modelType) {
         ReferenceArrayList<BlockState> list = new ReferenceArrayList<>();
 
-        addSlab(slabType, waterlogged, Blocks.OAK_SLAB, Blocks.PETRIFIED_OAK_SLAB, list);
         addSlab(slabType, waterlogged, Blocks.CUT_COPPER_SLAB, Blocks.WAXED_CUT_COPPER_SLAB, list);
         addSlab(slabType, waterlogged, Blocks.EXPOSED_CUT_COPPER_SLAB, Blocks.WAXED_EXPOSED_CUT_COPPER_SLAB, list);
         addSlab(slabType, waterlogged, Blocks.WEATHERED_CUT_COPPER_SLAB, Blocks.WAXED_WEATHERED_CUT_COPPER_SLAB, list);
         addSlab(slabType, waterlogged, Blocks.OXIDIZED_CUT_COPPER_SLAB, Blocks.WAXED_OXIDIZED_CUT_COPPER_SLAB, list);
 
+        addSlab(slabType, waterlogged, Blocks.OAK_SLAB, Blocks.PETRIFIED_OAK_SLAB, list);
+
         DefaultModelData.USABLE_STATES.put(modelType, list);
     }
 
-    private static void addSlab(SlabType slabType, boolean waterlogged, Block to, Block from, ReferenceArrayList<BlockState> list) {
+    private static void addSlab(SlabType slabType, boolean waterlogged, Block to, Block from, List<BlockState> list) {
         BlockState state = from.getDefaultState().with(SlabBlock.WATERLOGGED, waterlogged).with(SlabBlock.TYPE, slabType);
         list.add(state);
         DefaultModelData.SPECIAL_REMAPS.put(state, to.getStateWithProperties(state));
@@ -448,6 +563,57 @@ public class DefaultModelData {
         }
 
         DefaultModelData.USABLE_STATES.put(modelType, list);
+    }
+
+    private static void addScaffolding(boolean bottom, boolean waterlogged, BlockModelType modelType) {
+
+        var model = new PolymerBlockModel[]{PolymerBlockModel.of(Identifier.of("minecraft:block/scaffolding_" + (bottom ? "unstable" : "stable")))};
+        var list = new ReferenceArrayList<BlockState>();
+
+        for (int i = 0; i <= 7; i++) {
+            var state = Blocks.SCAFFOLDING.getDefaultState()
+                .with(ScaffoldingBlock.BOTTOM, bottom)
+                .with(ScaffoldingBlock.WATERLOGGED, waterlogged)
+                .with(ScaffoldingBlock.DISTANCE, i);
+
+            MODELS.put(state, model);
+
+            if (i != 7 && !(bottom && i == 0)) {
+                list.add(state);
+                SPECIAL_REMAPS.put(state, state.with(ScaffoldingBlock.DISTANCE, 7));
+            }
+        }
+
+        USABLE_STATES.put(modelType, list);
+    }
+
+    private static void addFenceGates(Block... blocks) {
+        for (Block base : blocks) {
+            addFenceGates(base, true, true, true, BlockModelType.NORTH_SOUTH_INWALL_OPEN_GATE);
+            addFenceGates(base, true, true, false, BlockModelType.NORTH_SOUTH_INWALL_GATE);
+            addFenceGates(base, true, false, true, BlockModelType.NORTH_SOUTH_OPEN_GATE);
+            addFenceGates(base, true, false, false, BlockModelType.NORTH_SOUTH_GATE);
+            addFenceGates(base, false, true, true, BlockModelType.EAST_WEST_INWALL_OPEN_GATE);
+            addFenceGates(base, false, true, false, BlockModelType.EAST_WEST_INWALL_GATE);
+            addFenceGates(base, false, false, true, BlockModelType.EAST_WEST_OPEN_GATE);
+            addFenceGates(base, false, false, false, BlockModelType.EAST_WEST_GATE);
+        }
+    }
+    private static void addFenceGates(Block base, boolean northSouth, boolean inWall, boolean open, BlockModelType modelType) {
+        var list = new ReferenceArrayList<BlockState>();
+
+        var directions = northSouth ? new Direction[]{Direction.NORTH, Direction.SOUTH} : new Direction[]{Direction.EAST, Direction.WEST};
+        for (Direction direction : directions) {
+            var state = base.getDefaultState()
+                .with(FenceGateBlock.IN_WALL, inWall)
+                .with(FenceGateBlock.OPEN, open)
+                .with(FenceGateBlock.POWERED, true)
+                .with(FenceGateBlock.FACING, direction);
+            list.add(state);
+            SPECIAL_REMAPS.put(state, state.with(FenceGateBlock.POWERED, false));
+        }
+
+        USABLE_STATES.put(modelType, list);
     }
 
     private static void generateDefault(BlockModelType type, Block... blocks) {

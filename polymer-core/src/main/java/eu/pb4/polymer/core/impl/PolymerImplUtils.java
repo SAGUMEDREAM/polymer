@@ -1,8 +1,8 @@
 package eu.pb4.polymer.core.impl;
 
 import eu.pb4.polymer.common.impl.CompatStatus;
-import eu.pb4.polymer.core.api.block.PolymerBlock;
 import eu.pb4.polymer.core.api.item.PolymerItemUtils;
+import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
 import eu.pb4.polymer.core.api.utils.PolymerUtils;
 import eu.pb4.polymer.core.impl.client.InternalClientRegistry;
 import eu.pb4.polymer.core.impl.compat.ServerTranslationUtils;
@@ -19,21 +19,14 @@ import net.fabricmc.fabric.api.itemgroup.v1.ItemGroupEvents;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
-import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.tooltip.TooltipType;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.network.packet.s2c.play.ScreenHandlerSlotUpdateS2CPacket;
-import net.minecraft.network.packet.s2c.play.UpdateSelectedSlotS2CPacket;
 import net.minecraft.registry.*;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.state.property.Property;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.Unit;
-import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.MathHelper;
 import org.jetbrains.annotations.Nullable;
 import xyz.nucleoid.packettweaker.PacketContext;
@@ -48,6 +41,7 @@ import java.util.stream.Stream;
 
 public class PolymerImplUtils {
     public static final ThreadLocal<Unit> IS_RELOADING_WORLD = new ThreadLocal<>();
+    public static final ThreadLocal<Unit> IGNORE_PLAY_SOUND_EXCLUSION = new ThreadLocal<>();
     public static final Collection<BlockState> POLYMER_STATES = ((PolymerIdList<BlockState>) Block.STATE_IDS).polymer$getPolymerEntries();
     public static final RegistryWrapper.WrapperLookup FALLBACK_LOOKUP = DynamicRegistryManager.of(Registries.REGISTRIES);
 
@@ -114,7 +108,7 @@ public class PolymerImplUtils {
                     }
 
                     for (var entry : reg) {
-                        msg.accept("" + reg.getRawId(entry) + " | " + reg.getId(entry).toString() + " | Polymer? " + PolymerUtils.isServerOnly(entry));
+                        msg.accept("" + reg.getRawId(entry) + " | " + reg.getId(entry).toString() + " | Polymer? " + PolymerUtils.isServerOnly(reg, entry));
                     }
                 }
                 msg.accept("");
@@ -133,7 +127,7 @@ public class PolymerImplUtils {
                 msg.accept("");
 
                 for (var state : Block.STATE_IDS) {
-                    msg.accept(Block.STATE_IDS.getRawId(state) + " | " + getAsString(state) + " | Polymer? " + (state.getBlock() instanceof PolymerBlock));
+                    msg.accept(Block.STATE_IDS.getRawId(state) + " | " + getAsString(state) + " | Polymer? " + (PolymerSyncedObject.getSyncedObject(Registries.BLOCK, state.getBlock())));
                 }
             }
 
@@ -201,26 +195,6 @@ public class PolymerImplUtils {
         return ((PolymerIdList) Block.STATE_IDS).polymer$getOffset();
     }
 
-    public static void setStateIdsLock(boolean value) {
-        ((PolymerIdList) Block.STATE_IDS).polymer$setReorderLock(value);
-    }
-
-    public static boolean getStateIdsLock(boolean value) {
-        return ((PolymerIdList) Block.STATE_IDS).polymer$getReorderLock();
-    }
-
-    public static boolean shouldSkipStateInitialization(Stream<StackWalker.StackFrame> s) {
-        if (CompatStatus.QUILT_REGISTRY) {
-            var x = s.skip(3).findFirst();
-            return x.isPresent() && x.get().getMethodName().contains("lambda$onInit");
-        }
-        return false;
-    }
-
-    public static boolean shouldLogStateRebuild(StackTraceElement[] trace) {
-        return trace.length <= 4 || !trace[4].getClassName().startsWith("org.quiltmc.qsl.registry.impl.sync");
-    }
-
     public static boolean removeFromItemGroup(ItemStack stack) {
         if (stack == null) {
             return true;
@@ -228,15 +202,15 @@ public class PolymerImplUtils {
         return isPolymerControlled(stack);
     }
     public static boolean isPolymerControlled(ItemStack stack) {
-        return PolymerItemUtils.isPolymerServerItem(stack) || PolymerItemUtils.getServerIdentifier(stack) != null || PolymerUtils.isServerOnly(stack);
+        return PolymerItemUtils.isPolymerServerItem(stack) || PolymerItemUtils.getServerIdentifier(stack) != null;
     }
 
     public static PolymerTooltipType getTooltipContext(ServerPlayerEntity player) {
         return player != null && player.networkHandler instanceof PolymerPlayNetworkHandlerExtension h && h.polymer$advancedTooltip() ? PolymerTooltipType.ADVANCED : PolymerTooltipType.BASIC;
     }
 
-    public static boolean isServerSideSyncableEntry(Registry reg, Object obj) {
-        return PolymerUtils.isServerOnly(obj) || (PolymerImpl.SYNC_MODDED_ENTRIES_POLYMC && PolyMcUtils.isServerSide(reg, obj));
+    public static boolean isServerSideSyncableEntry(@SuppressWarnings("rawtypes") Registry reg, Object obj) {
+        return PolymerUtils.isServerOnly(reg, obj) || (PolymerImpl.SYNC_MODDED_ENTRIES_POLYMC && PolyMcUtils.isServerSide(reg, obj));
     }
 
     public static ItemStack convertStack(ItemStack representation, ServerPlayerEntity player) {
@@ -259,5 +233,19 @@ public class PolymerImplUtils {
                 }
             }
         }
+    }
+
+    @Nullable
+    public static String getModName(ItemStack stack) {
+        var id = PolymerItemUtils.getServerIdentifier(stack);
+        if (id != null) {
+            return getModName(id);
+        }
+        return null;
+    }
+
+    public static String getModName(Identifier id) {
+        var container = FabricLoader.getInstance().getModContainer(id.getNamespace());
+        return container.isPresent() ? container.get().getMetadata().getName() : (id.getNamespace() + "*");
     }
 }

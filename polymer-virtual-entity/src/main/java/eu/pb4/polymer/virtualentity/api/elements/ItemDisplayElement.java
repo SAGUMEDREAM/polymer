@@ -26,14 +26,23 @@ public class ItemDisplayElement extends DisplayElement {
         return this.dataTracker.get(DisplayTrackedData.Item.ITEM);
     }
 
-    public void setModelTransformation(ModelTransformationMode mode) {
+    public void setItemDisplayContext(ModelTransformationMode mode) {
         this.dataTracker.set(DisplayTrackedData.Item.ITEM_DISPLAY, mode.getIndex());
     }
-
-    public ModelTransformationMode getModelTransformation() {
+    public ModelTransformationMode getItemDisplayContext() {
+        //noinspection DataFlowIssue
         return ModelTransformationMode.FROM_INDEX.apply(this.dataTracker.get(DisplayTrackedData.Item.ITEM_DISPLAY));
     }
 
+    @Deprecated(forRemoval = true)
+    public void setModelTransformation(ModelTransformationMode mode) {
+        setItemDisplayContext(mode);
+    }
+
+    @Deprecated(forRemoval = true)
+    public ModelTransformationMode getModelTransformation() {
+        return getItemDisplayContext();
+    }
 
     @Override
     protected final EntityType<? extends DisplayEntity> getEntityType() {

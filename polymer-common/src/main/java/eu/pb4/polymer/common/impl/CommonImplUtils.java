@@ -53,13 +53,13 @@ public class CommonImplUtils {
                     if (color == colorPixel) {
                         line++;
                     } else {
-                        base.append(Text.literal(chr.repeat(line)).setStyle(Style.EMPTY.withColor(color)));
+                        base.append(Text.literal(chr.repeat(line)).setStyle(Style.EMPTY.withColor(color).withShadowColor(color | 0xFF000000)));
                         color = colorPixel;
                         line = 1;
                     }
                 }
 
-                base.append(Text.literal(chr.repeat(line)).setStyle(Style.EMPTY.withColor(color)));
+                base.append(Text.literal(chr.repeat(line)).setStyle(Style.EMPTY.withColor(color).withShadowColor(color | 0xFF000000)));
                 icon.add(base);
             }
 
@@ -97,7 +97,7 @@ public class CommonImplUtils {
 
     public static boolean permissionCheck(ServerPlayerEntity player, String path, int operatorLevel) {
         if (CompatStatus.FABRIC_PERMISSION_API_V0) {
-            return Permissions.check(player.getCommandSource(), "polymer." + path, operatorLevel);
+            return Permissions.check(player, "polymer." + path, operatorLevel);
         } else {
             return player.hasPermissionLevel(operatorLevel);
         }

@@ -44,4 +44,25 @@ public class ItemStackMixin {
             return content;
         });
     }
+
+    @ModifyArg(method = "<clinit>", at = @At(value = "INVOKE", target = "Lcom/mojang/serialization/Codec;lazyInitialized(Ljava/util/function/Supplier;)Lcom/mojang/serialization/Codec;", ordinal = 1))
+    private static Supplier<Codec<ItemStack>> patchCodec2(Supplier<Codec<ItemStack>> codec) {
+        return () -> codec.get().xmap(content -> { // Decode
+            if (PolymerCommonUtils.isServerNetworkingThread()) {
+                var context = PacketContext.get();
+                var lookup = context.getRegistryWrapperLookup() != null ? context .getRegistryWrapperLookup() : PolymerImplUtils.FALLBACK_LOOKUP;
+                return PolymerItemUtils.getRealItemStack(content, lookup);
+            }
+            return content;
+        }, content -> { // Encode
+            if (PolymerCommonUtils.isServerNetworkingThreadWithContext()) {
+                var ctx = PacketContext.get();
+                if (ctx.getBackingPacketListener() == null) {
+                    return content;
+                }
+                return PolymerItemUtils.getPolymerItemStack(content, ctx);
+            }
+            return content;
+        });
+    }
 }

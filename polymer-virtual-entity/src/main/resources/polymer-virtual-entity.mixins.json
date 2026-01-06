@@ -19,6 +19,7 @@
     "accessors.BlockDisplayEntityAccessor",
     "accessors.DisplayEntityAccessor",
     "accessors.EntityAccessor",
+    "accessors.EntityAttachS2CPacketAccessor",
     "accessors.EntityTrackerAccessor",
     "accessors.EntityTrackerEntryAccessor",
     "accessors.InteractionEntityAccessor",
@@ -31,7 +32,8 @@
     "block.PistonBlockEntityMixin",
     "block.PistonBlockMixin",
     "block.ServerChunkLoadingManagerMixin",
-    "block.ServerChunkManagerMixin",
+    "block.ServerWorldMixin",
+    "block.WorldChunkAccessor",
     "block.WorldChunkMixin",
     "compat.ip_ImmPtlChunkTracking",
     "compat.ip_PlayerChunkLoadingMixin"

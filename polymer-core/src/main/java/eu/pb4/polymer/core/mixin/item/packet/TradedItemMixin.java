@@ -4,7 +4,6 @@ import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import eu.pb4.polymer.core.api.item.PolymerItemUtils;
 import eu.pb4.polymer.core.impl.networking.TransformingPacketCodec;
 import eu.pb4.polymer.core.impl.other.ComponentChangesMap;
-import net.minecraft.component.ComponentMap;
 import net.minecraft.network.RegistryByteBuf;
 import net.minecraft.network.codec.PacketCodec;
 import net.minecraft.predicate.ComponentPredicate;

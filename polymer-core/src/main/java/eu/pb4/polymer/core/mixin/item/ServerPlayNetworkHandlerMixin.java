@@ -1,18 +1,24 @@
 package eu.pb4.polymer.core.mixin.item;
 
 import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
+import eu.pb4.polymer.common.api.ScopedOverride;
 import eu.pb4.polymer.common.impl.CommonImplUtils;
 import eu.pb4.polymer.core.api.block.PolymerBlockUtils;
 import eu.pb4.polymer.core.api.entity.PolymerEntityUtils;
 import eu.pb4.polymer.core.api.item.PolymerItem;
 import eu.pb4.polymer.core.api.item.PolymerItemUtils;
+import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
+import eu.pb4.polymer.core.api.utils.PolymerUtils;
 import eu.pb4.polymer.core.impl.PolymerImpl;
 import eu.pb4.polymer.core.impl.interfaces.LastActionResultStorer;
 import eu.pb4.polymer.core.impl.networking.BlockPacketUtil;
 import eu.pb4.polymer.core.impl.networking.PolymerServerProtocol;
 import eu.pb4.polymer.core.impl.other.ActionSource;
 import eu.pb4.polymer.core.mixin.entity.LivingEntityAccessor;
+import net.minecraft.block.BlockState;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.data.DataTracker;
 import net.minecraft.item.BlockItem;
@@ -26,17 +32,16 @@ import net.minecraft.network.packet.c2s.play.PlayerInteractEntityC2SPacket;
 import net.minecraft.network.packet.c2s.play.PlayerInteractItemC2SPacket;
 import net.minecraft.network.packet.s2c.common.SynchronizeTagsS2CPacket;
 import net.minecraft.network.packet.s2c.play.*;
+import net.minecraft.registry.Registries;
 import net.minecraft.registry.tag.TagPacketSerializer;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ConnectedClientData;
-import net.minecraft.server.network.ServerCommonNetworkHandler;
-import net.minecraft.server.network.ServerPlayNetworkHandler;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.network.*;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.ActionResult;
 import net.minecraft.util.Hand;
 import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.Direction;
+import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -62,6 +67,8 @@ public abstract class ServerPlayNetworkHandlerMixin extends ServerCommonNetworkH
     private int sequence;
 
     @Shadow public abstract void updateSequence(int sequence);
+
+    @Shadow protected abstract boolean handlePendingTeleport();
 
     @Unique
     private String polymerCore$language;
@@ -94,7 +101,7 @@ public abstract class ServerPlayNetworkHandlerMixin extends ServerCommonNetworkH
         if (!this.polymerCore$language.equals(packet.options().language())) {
             this.polymerCore$language = packet.options().language();
             PolymerServerProtocol.sendSyncPackets(player.networkHandler, true);
-            this.sendPacket(new SynchronizeTagsS2CPacket(TagPacketSerializer.serializeTags(this.player.getServerWorld().getServer().getCombinedDynamicRegistries())));
+            this.sendPacket(new SynchronizeTagsS2CPacket(TagPacketSerializer.serializeTags(this.player.getWorld().getServer().getCombinedDynamicRegistries())));
             this.player.getRecipeBook().sendInitRecipesPacket(this.player);
         }
     }
@@ -109,7 +116,7 @@ public abstract class ServerPlayNetworkHandlerMixin extends ServerCommonNetworkH
             return;
         }
 
-        if (itemStack.getItem() instanceof PolymerItem polymerItem) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, itemStack.getItem()) instanceof PolymerItem polymerItem) {
             var data = PolymerItemUtils.getItemSafely(polymerItem, itemStack, PacketContext.create(this.player));
             if (data.item() instanceof BlockItem || data.item() instanceof BucketItem) {
                 this.sendPacket(new ScreenHandlerSlotUpdateS2CPacket(this.player.playerScreenHandler.syncId, this.player.playerScreenHandler.nextRevision(), packet.getHand() == Hand.MAIN_HAND ? 36 + this.player.getInventory().selectedSlot : 45, itemStack));
@@ -117,10 +124,25 @@ public abstract class ServerPlayNetworkHandlerMixin extends ServerCommonNetworkH
         }
     }
 
+    @WrapOperation(method = "onPlayerInteractBlock", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerPlayerInteractionManager;interactBlock(Lnet/minecraft/server/network/ServerPlayerEntity;Lnet/minecraft/world/World;Lnet/minecraft/item/ItemStack;Lnet/minecraft/util/Hand;Lnet/minecraft/util/hit/BlockHitResult;)Lnet/minecraft/util/ActionResult;"))
+    private ActionResult captureBlockInteraction(ServerPlayerInteractionManager instance, ServerPlayerEntity player, World world, ItemStack stack, Hand hand, BlockHitResult hitResult, Operation<ActionResult> operation, @Local ServerWorld serverWorld) {
+        var oldState = this.player.getWorld().getBlockState(hitResult.getBlockPos());
 
-    @ModifyExpressionValue(method = "onPlayerInteractBlock", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerPlayerInteractionManager;interactBlock(Lnet/minecraft/server/network/ServerPlayerEntity;Lnet/minecraft/world/World;Lnet/minecraft/item/ItemStack;Lnet/minecraft/util/Hand;Lnet/minecraft/util/hit/BlockHitResult;)Lnet/minecraft/util/ActionResult;"))
-    private ActionResult captureBlockInteraction(ActionResult original, @Local ItemStack stack, @Local Hand hand, @Local BlockHitResult blockHitResult, @Local ServerWorld world) {
-        if (PolymerBlockUtils.isPolymerBlockInteraction(this.player, stack, hand, blockHitResult, world, original)) {
+        ScopedOverride soundOverride;
+        if (PolymerBlockUtils.isIgnoringPlaySoundExceptedEntity(this.player, stack, hand, oldState, hitResult, serverWorld)) {
+            soundOverride = PolymerUtils.ignorePlaySoundExclusion();
+        } else {
+            soundOverride = ScopedOverride.NO_OP;
+        }
+
+        var original = operation.call(instance, player, world, stack, hand, hitResult);
+        soundOverride.close();
+
+        if (PolymerBlockUtils.isPolymerBlockInteraction(this.player, stack, hand, oldState, hitResult, serverWorld, original)) {
+            if (original instanceof ActionResult.Success success && success.swingSource() == ActionResult.SwingSource.CLIENT) {
+                original = new ActionResult.Success(ActionResult.SwingSource.SERVER, success.itemContext());
+            }
+
             this.lastActionResult = original;
             this.lastActionSource = ActionSource.BLOCK;
         }
@@ -137,9 +159,22 @@ public abstract class ServerPlayNetworkHandlerMixin extends ServerCommonNetworkH
     }
 
 
-    @ModifyExpressionValue(method = "onPlayerInteractItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerPlayerInteractionManager;interactItem(Lnet/minecraft/server/network/ServerPlayerEntity;Lnet/minecraft/world/World;Lnet/minecraft/item/ItemStack;Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;"))
-    private ActionResult captureItemInteraction(ActionResult original, @Local ItemStack stack, @Local Hand hand, @Local ServerWorld world) {
-        if (PolymerItemUtils.isPolymerItemInteraction(this.player, stack, hand, world, original)) {
+    @WrapOperation(method = "onPlayerInteractItem", at = @At(value = "INVOKE", target = "Lnet/minecraft/server/network/ServerPlayerInteractionManager;interactItem(Lnet/minecraft/server/network/ServerPlayerEntity;Lnet/minecraft/world/World;Lnet/minecraft/item/ItemStack;Lnet/minecraft/util/Hand;)Lnet/minecraft/util/ActionResult;"))
+    private ActionResult captureItemInteraction(ServerPlayerInteractionManager instance, ServerPlayerEntity player, World world, ItemStack stack, Hand hand, Operation<ActionResult> operation, @Local ServerWorld serverWorld) {
+        ScopedOverride soundOverride;
+        if (PolymerItemUtils.isIgnoringPlaySoundExceptedEntity(this.player, stack, hand, serverWorld)) {
+            soundOverride = PolymerUtils.ignorePlaySoundExclusion();
+        } else {
+            soundOverride = ScopedOverride.NO_OP;
+        }
+
+        var original = operation.call(instance, player, world, stack, hand);
+        soundOverride.close();
+
+        if (PolymerItemUtils.isPolymerItemInteraction(this.player, stack, hand, serverWorld, original)) {
+            if (original instanceof ActionResult.Success success && success.swingSource() == ActionResult.SwingSource.CLIENT) {
+                original = new ActionResult.Success(ActionResult.SwingSource.SERVER, success.itemContext());
+            }
             this.lastActionResult = original;
             this.lastActionSource = ActionSource.ITEM;
         }

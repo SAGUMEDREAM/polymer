@@ -25,7 +25,7 @@ public abstract class emi_EmiStackMixin {
 
     @Shadow public abstract ItemStack getItemStack();
 
-    @Shadow public abstract Object getKey();
+    @Shadow(remap = false) public abstract Object getKey();
 
     @Shadow public abstract <T> @Nullable T get(ComponentType<? extends T> type);
 

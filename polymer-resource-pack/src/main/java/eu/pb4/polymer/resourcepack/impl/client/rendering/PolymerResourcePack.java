@@ -5,27 +5,48 @@ import eu.pb4.polymer.resourcepack.api.PolymerResourcePackUtils;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.resource.*;
-import net.minecraft.resource.featuretoggle.FeatureSet;
 import net.minecraft.text.Text;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
 
 @ApiStatus.Internal
 @Environment(EnvType.CLIENT)
-public class PolymerResourcePack  {
-    public static boolean generated = false;
+public class PolymerResourcePack {
+    @Nullable
+    private volatile static Path path = null;
 
     @Nullable
-    public static ResourcePackProfile.PackFactory setup() {
+    public synchronized static ResourcePackProfile.PackFactory setup() {
+        if (path != null && Files.exists(path)) {
+            return new ZipResourcePack.ZipBackedFactory(path);
+        }
+
         Path outputPath = PolymerResourcePackUtils.getMainPath();
-        if ((outputPath.toFile().exists() && generated) || PolymerResourcePackUtils.buildMain(outputPath)) {
-            generated = true;
-            return new ZipResourcePack.ZipBackedFactory(outputPath.toFile());
+        if (Files.exists(outputPath)) {
+            try {
+                Files.delete(outputPath);
+            } catch (Throwable e) {
+                // Failed to remove, change path to workaround one!
+                outputPath = outputPath.resolveSibling(outputPath.getFileName().toString() + "_client.zip");
+                if (Files.exists(outputPath)) {
+                    try {
+                        Files.delete(outputPath);
+                    } catch (Throwable f2) {
+                        // AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+                        // I hate windows
+                    }
+                }
+            }
+        }
+
+        if (PolymerResourcePackUtils.buildMain(outputPath)) {
+            path = outputPath;
+            return new ZipResourcePack.ZipBackedFactory(outputPath);
         } else {
             return null;
         }

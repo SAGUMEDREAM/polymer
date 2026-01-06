@@ -1,5 +1,7 @@
 package eu.pb4.polymer.core.mixin.other;
 
+import com.llamalad7.mixinextras.sugar.Local;
+import com.mojang.serialization.DynamicOps;
 import eu.pb4.polymer.common.api.PolymerCommonUtils;
 import eu.pb4.polymer.core.api.entity.PolymerEntityUtils;
 import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
@@ -10,6 +12,7 @@ import net.minecraft.entity.attribute.EntityAttributes;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryOps;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.entry.RegistryFixedCodec;
 import org.spongepowered.asm.mixin.Final;
@@ -29,21 +32,25 @@ public class RegistryFixedCodecMixin {
             method = "encode(Lnet/minecraft/registry/entry/RegistryEntry;Lcom/mojang/serialization/DynamicOps;Ljava/lang/Object;)Lcom/mojang/serialization/DataResult;",
             at = @At("HEAD")
     )
-    private RegistryEntry<?> polymerCore$swapEntry(RegistryEntry<?> entry) {
+    private RegistryEntry<?> polymerCore$swapEntry(RegistryEntry<?> entry, @Local(argsOnly = true) DynamicOps<?> ops) {
         if (PolymerCommonUtils.isServerNetworkingThread()) {
             var player = PacketContext.get();
             try {
-                if (entry.value() instanceof PolymerSyncedObject<?> polymerSyncedObject) {
-                    var registry = ((Registry<Registry>) (Object) Registries.REGISTRIES).get(this.registry);
-                    var x = registry.getEntry(polymerSyncedObject.getPolymerReplacement(player));
-                    if (x == null) {
-                        return (RegistryEntry<?>) registry.getEntry(0).orElse(entry);
-                    }
-                    return x;
-                } else if (entry.value() instanceof EntityType<?> type && PolymerEntityUtils.isPolymerEntityType(type)) {
+                //noinspection unchecked,rawtypes
+                var registry = ((Registry<Registry>) (Object) Registries.REGISTRIES).get(this.registry);
+                //noinspection unchecked
+                if (entry.value() instanceof EntityType<?> type && PolymerEntityUtils.isPolymerEntityType(type)) {
                     return EntityType.MARKER.getRegistryEntry();
                 } else if (entry.value() instanceof EntityAttribute && PolymerEntityUtils.isPolymerEntityAttribute((RegistryEntry<EntityAttribute>) entry)) {
                     return EntityAttributes.SPAWN_REINFORCEMENTS;
+                } else if (PolymerSyncedObject.getSyncedObject(registry, entry.value()) instanceof PolymerSyncedObject<?> polymerSyncedObject) {
+                    //noinspection unchecked,DataFlowIssue
+                    var x = registry.getEntry(((PolymerSyncedObject<Object>) polymerSyncedObject).getPolymerReplacement(entry.value(), player));
+                    if (x == null) {
+                        //noinspection unchecked
+                        return (RegistryEntry<?>) registry.getEntry(0).orElse(entry);
+                    }
+                    return x;
                 }
             } catch (Throwable e) {
                 e.printStackTrace();

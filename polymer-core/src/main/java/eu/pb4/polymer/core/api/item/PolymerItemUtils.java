@@ -9,21 +9,30 @@ import eu.pb4.polymer.common.api.events.BooleanEvent;
 import eu.pb4.polymer.common.api.events.FunctionEvent;
 import eu.pb4.polymer.common.impl.CompatStatus;
 import eu.pb4.polymer.core.api.block.PolymerBlockUtils;
+import eu.pb4.polymer.core.api.entity.PolymerEntity;
 import eu.pb4.polymer.core.api.entity.PolymerEntityUtils;
 import eu.pb4.polymer.core.api.other.PolymerComponent;
+import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
 import eu.pb4.polymer.core.api.utils.PolymerUtils;
 import eu.pb4.polymer.core.impl.PolymerImpl;
 import eu.pb4.polymer.core.impl.TransformingComponent;
 import eu.pb4.polymer.core.impl.compat.polymc.PolyMcUtils;
+import eu.pb4.polymer.rsm.api.RegistrySyncUtils;
+import it.unimi.dsi.fastutil.Function;
 import it.unimi.dsi.fastutil.objects.ReferenceArrayList;
+import it.unimi.dsi.fastutil.objects.ReferenceSet;
+import it.unimi.dsi.fastutil.objects.ReferenceSortedSets;
+import net.minecraft.block.BlockState;
 import net.minecraft.component.ComponentType;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.EnchantmentEffectComponentTypes;
 import net.minecraft.component.type.*;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.attribute.DefaultAttributeRegistry;
 import net.minecraft.item.*;
 import net.minecraft.item.equipment.trim.ArmorTrim;
+import net.minecraft.item.tooltip.TooltipAppender;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
@@ -41,8 +50,12 @@ import org.jetbrains.annotations.UnmodifiableView;
 import xyz.nucleoid.packettweaker.PacketContext;
 
 import java.util.*;
+import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
+/**
+ * General utility methods used for handling polymer items
+ */
 public final class PolymerItemUtils {
     public static final String POLYMER_STACK = "$polymer:stack";
     private static final String POLYMC_STACK = "PolyMcOriginal";
@@ -69,6 +82,9 @@ public final class PolymerItemUtils {
     /**
      * Allows to force rendering of some items as polymer one (for example vanilla ones)
      */
+    public static final BooleanEvent<BiPredicate<ItemStack, PacketContext>> CONTEXT_ITEM_CHECK = new BooleanEvent<>();
+
+    @Deprecated
     public static final BooleanEvent<Predicate<ItemStack>> ITEM_CHECK = new BooleanEvent<>();
     /**
      * Allows to modify how virtual items looks before being sent to client (only if using build in methods!)
@@ -77,7 +93,23 @@ public final class PolymerItemUtils {
      */
     public static final FunctionEvent<ItemModificationEventHandler, ItemStack> ITEM_MODIFICATION_EVENT = new FunctionEvent<>();
 
+    /**
+     * Allows to run additional logic, making interactions work correctly server side,
+     * emulating or preventing otherwise client dictated behaviour.
+     *
+     * See {@link PolymerItem#isPolymerItemInteraction(ServerPlayerEntity, Hand, ItemStack, ServerWorld, ActionResult)}
+     */
     public static final BooleanEvent<PolymerItemInteractionListener> POLYMER_ITEM_INTERACTION_CHECK = new BooleanEvent<>();
+    /**
+     * Changes sound logic within the item use interaction code to always play sounds to the client.
+     *
+     * See {@link PolymerItem#isIgnoringItemInteractionPlaySoundExceptedEntity(ServerPlayerEntity, Hand, ItemStack, ServerWorld)}
+     */
+    public static final BooleanEvent<PolymerIgnoreSoundExceptionListener> POLYMER_IGNORE_SOUND_EXCEPTED_ENTITY = new BooleanEvent<>();
+    /**
+     * Event for extending which items should be considered to be server items (have different data on the client).
+     */
+    public static final BooleanEvent<ServerItemPredicate> IS_SERVER_ITEM_EVENT = new BooleanEvent<>();
 
     private static final IdentityHashMap<Item, List<ComponentType<?>>> FORCE_SYNCED_COMPONENTS = new IdentityHashMap<>();
 
@@ -102,7 +134,6 @@ public final class PolymerItemUtils {
             DataComponentTypes.ATTRIBUTE_MODIFIERS,
             DataComponentTypes.BANNER_PATTERNS,
             DataComponentTypes.BASE_COLOR,
-            DataComponentTypes.HIDE_TOOLTIP,
             DataComponentTypes.CAN_BREAK,
             DataComponentTypes.CAN_PLACE_ON,
             DataComponentTypes.REPAIR_COST,
@@ -125,8 +156,10 @@ public final class PolymerItemUtils {
             DataComponentTypes.GLIDER,
             DataComponentTypes.CUSTOM_MODEL_DATA,
             DataComponentTypes.DYED_COLOR,
-            DataComponentTypes.REPAIRABLE
+            DataComponentTypes.REPAIRABLE,
+            DataComponentTypes.CHARGED_PROJECTILES,
     };
+
     @SuppressWarnings("rawtypes")
     private static final List<HideableTooltip> HIDEABLE_TOOLTIPS = List.of(
             HideableTooltip.of(DataComponentTypes.ATTRIBUTE_MODIFIERS, AttributeModifiersComponent::withShowInTooltip),
@@ -141,7 +174,17 @@ public final class PolymerItemUtils {
     );
 
     private static boolean stonecutterFix = PolymerImpl.FIX_STONECUTER;
+    private static final ReferenceSet<ComponentType<?>> FORCE_HIDE_TOOLTIP = ReferenceSet.of(
+            DataComponentTypes.UNBREAKABLE,
+            DataComponentTypes.ATTRIBUTE_MODIFIERS,
+            DataComponentTypes.BLOCK_ENTITY_DATA,
+            DataComponentTypes.CAN_BREAK,
+            DataComponentTypes.CAN_PLACE_ON
+    );
 
+    private static final ReferenceSet<ComponentType<?>> IGNORE_TOOLTIP_HIDING = ReferenceSet.of(
+        DataComponentTypes.LORE
+    );
 
 
     private PolymerItemUtils() {
@@ -169,13 +212,13 @@ public final class PolymerItemUtils {
     public static ItemStack getPolymerItemStack(ItemStack itemStack, TooltipType tooltipContext, PacketContext context) {
         if (getPolymerIdentifier(itemStack) != null) {
             return itemStack;
-        } else if (itemStack.getItem() instanceof PolymerItem item) {
+        } else if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, itemStack.getItem()) instanceof PolymerItem item) {
             return item.getPolymerItemStack(itemStack, tooltipContext, context);
         } else if (isPolymerServerItem(itemStack, context)) {
             return createItemStack(itemStack, tooltipContext, context);
         }
 
-        if (ITEM_CHECK.invoke((x) -> x.test(itemStack))) {
+        if (CONTEXT_ITEM_CHECK.invoke((x) -> x.test(itemStack, context))) {
             return createItemStack(itemStack, tooltipContext, context);
         }
 
@@ -203,8 +246,10 @@ public final class PolymerItemUtils {
                 }
 
                 return x;
-            } catch (Throwable ignored) {
-
+            } catch (Throwable e) {
+                if (PolymerImpl.LOG_MORE_ERRORS) {
+                    PolymerImpl.LOGGER.warn("Failed to decode Item Stack!", e);
+                }
             }
         }
 
@@ -299,6 +344,9 @@ public final class PolymerItemUtils {
 
         return nbtData.get(POLYMER_STACK_COMPONENTS_CODEC).result().orElse(Map.of());
     }
+    public static void registerOverlay(Item item, PolymerItem polymerItem) {
+        PolymerItem.registerOverlay(item, polymerItem);
+    }
 
     public static boolean isPolymerServerItem(ItemStack itemStack) {
         return isPolymerServerItem(itemStack, PacketContext.get());
@@ -308,7 +356,7 @@ public final class PolymerItemUtils {
         if (getPolymerIdentifier(itemStack) != null) {
             return false;
         }
-        if (itemStack.getItem() instanceof PolymerItem) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, itemStack.getItem()) instanceof PolymerItem) {
             return true;
         }
 
@@ -336,7 +384,7 @@ public final class PolymerItemUtils {
             }
         }
 
-        return ITEM_CHECK.invoke((x) -> x.test(itemStack));
+        return CONTEXT_ITEM_CHECK.invoke((x) -> x.test(itemStack, context));
     }
 
     /**
@@ -363,7 +411,7 @@ public final class PolymerItemUtils {
         Item item = itemStack.getItem();
         Identifier model = null;
         boolean storeCount;
-        if (itemStack.getItem() instanceof PolymerItem virtualItem) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, itemStack.getItem()) instanceof PolymerItem virtualItem) {
             var data = PolymerItemUtils.getItemSafely(virtualItem, itemStack, context);
             item = data.item();
             storeCount = virtualItem.shouldStorePolymerItemStackCount();
@@ -397,7 +445,7 @@ public final class PolymerItemUtils {
             }
         }
 
-        if (itemStack.getItem() instanceof PolymerItem polymerItem) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, itemStack.getItem()) instanceof PolymerItem polymerItem) {
             polymerItem.modifyBasePolymerItemStack(out, itemStack, context);
         }
 
@@ -466,8 +514,8 @@ public final class PolymerItemUtils {
             if (!tooltip.isEmpty()) {
                 tooltip.removeFirst();
 
-                if (itemStack.getItem() instanceof PolymerItem) {
-                    ((PolymerItem) itemStack.getItem()).modifyClientTooltip(tooltip, itemStack, context);
+                if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, itemStack.getItem()) instanceof PolymerItem polymerItem) {
+                    polymerItem.modifyClientTooltip(tooltip, itemStack, context);
                 }
                 if (!tooltip.isEmpty()) {
                     var lore = new ArrayList<Text>();
@@ -511,7 +559,7 @@ public final class PolymerItemUtils {
         PolymerItem lastVirtual = item;
 
         int req = 0;
-        while (out instanceof PolymerItem newItem && newItem != item && req < maxDistance) {
+        while (PolymerSyncedObject.getSyncedObject(Registries.ITEM, out) instanceof PolymerItem newItem && newItem != item && req < maxDistance) {
             out = newItem.getPolymerItem(stack, context);
             lastVirtual = newItem;
             req++;
@@ -540,10 +588,17 @@ public final class PolymerItemUtils {
     }
 
     public static boolean isPolymerItemInteraction(ServerPlayerEntity player, ItemStack stack, Hand hand, ServerWorld world, ActionResult actionResult) {
-        if (stack.getItem() instanceof PolymerItem polymerItem && polymerItem.isPolymerItemInteraction(player, hand, stack, world, actionResult)) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, stack.getItem()) instanceof PolymerItem polymerItem && polymerItem.isPolymerItemInteraction(player, hand, stack, world, actionResult)) {
             return true;
         }
         return POLYMER_ITEM_INTERACTION_CHECK.invoke((x) -> x.isPolymerItemInteraction(player, hand, stack, world, actionResult));
+    }
+
+    public static boolean isIgnoringPlaySoundExceptedEntity(ServerPlayerEntity player, ItemStack stack, Hand hand, ServerWorld world) {
+        if (PolymerSyncedObject.getSyncedObject(Registries.ITEM, stack.getItem()) instanceof PolymerItem polymerItem && polymerItem.isIgnoringItemInteractionPlaySoundExceptedEntity(player, hand, stack, world)) {
+            return true;
+        }
+        return POLYMER_IGNORE_SOUND_EXCEPTED_ENTITY.invoke((x) -> x.isIgnoringItemInteractionPlaySoundExceptedEntity(player, hand, stack, world));
     }
 
     /**
@@ -577,6 +632,52 @@ public final class PolymerItemUtils {
         return FORCE_SYNCED_COMPONENTS.getOrDefault(item, List.of());
     }
 
+    public static boolean isServerItem(ItemStack stack, PacketContext context) {
+        if (isPolymerServerItem(stack, context)) {
+            return true;
+        }
+
+        if (CompatStatus.POLYMC && PolyMcUtils.isServerSide(Registries.ITEM, stack.getItem())) {
+            return true;
+        }
+
+        var container = stack.get(DataComponentTypes.CONTAINER);
+        if (container != null) {
+            for (var inner : container.iterateNonEmpty()) {
+                if (isServerItem(inner, context)) {
+                    return true;
+                }
+            }
+        }
+
+        var bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
+        if (bundle != null) {
+            for (var inner : bundle.iterate()) {
+                if (isServerItem(inner, context)) {
+                    return true;
+                }
+            }
+        }
+
+        var remainder = stack.get(DataComponentTypes.USE_REMAINDER);
+        if (remainder != null) {
+            if (isServerItem(remainder.convertInto(), context)) {
+                return true;
+            }
+        }
+
+        var projectile = stack.get(DataComponentTypes.CHARGED_PROJECTILES);
+        if (projectile != null) {
+            for (var inner : projectile.getProjectiles()) {
+                if (isServerItem(inner, context)) {
+                    return true;
+                }
+            }
+        }
+
+        return IS_SERVER_ITEM_EVENT.invoke(x -> x.isServerItem(stack, context));
+    }
+
     @FunctionalInterface
     public interface ItemModificationEventHandler {
         ItemStack modifyItem(ItemStack original, ItemStack client, PacketContext context);
@@ -587,7 +688,21 @@ public final class PolymerItemUtils {
         boolean isPolymerItemInteraction(ServerPlayerEntity player, Hand hand, ItemStack stack, ServerWorld world, ActionResult actionResult);
     }
 
+    @FunctionalInterface
+    public interface PolymerIgnoreSoundExceptionListener {
+        boolean isIgnoringItemInteractionPlaySoundExceptedEntity(ServerPlayerEntity player, Hand hand, ItemStack stack, ServerWorld world);
+    }
+
+    @FunctionalInterface
+    public interface ServerItemPredicate {
+        boolean isServerItem(ItemStack stack, PacketContext context);
+    }
+
     public record ItemWithMetadata(Item item, @Nullable Identifier itemModel) {
+    }
+
+    static {
+        CONTEXT_ITEM_CHECK.register((stack, context) -> ITEM_CHECK.invoke(x -> x.test(stack)));
     }
 
     private record HideableTooltip<T>(ComponentType<T> type, Predicate<T> shouldSet, TooltipSetter<T> setter) {

@@ -10,6 +10,7 @@ import net.minecraft.network.packet.s2c.play.PlayerRespawnS2CPacket;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.ConnectedClientData;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.world.ServerWorld;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -28,15 +29,17 @@ public class PlayerManagerMixin {
         PolymerServerNetworking.ON_PLAY_SYNC.invoke(x -> x.accept(player.networkHandler, handshake));
 
         if (((TempPlayerLoginAttachments) player).polymerNet$getForceRespawnPacket()) {
-            var world = player.getServerWorld();
-            connection.send(new PlayerRespawnS2CPacket(player.createCommonPlayerSpawnInfo(world), PlayerRespawnS2CPacket.KEEP_ALL));
+            var world = player.getWorld();
+            if (world instanceof ServerWorld serverWorld) {
+                connection.send(new PlayerRespawnS2CPacket(player.createCommonPlayerSpawnInfo(serverWorld), PlayerRespawnS2CPacket.KEEP_ALL));
+            }
         }
     }
 
     @Environment(EnvType.CLIENT)
     @Inject(method = "onPlayerConnect", at = @At("HEAD"))
     private void polymerNet$storePlayer(ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData, CallbackInfo ci) {
-        if (player.server.isHost(player.getGameProfile())) {
+        if (player.getServer().isHost(player.getGameProfile())) {
             ClientUtils.backupPlayer = player;
         }
     }
@@ -44,7 +47,7 @@ public class PlayerManagerMixin {
     @Environment(EnvType.CLIENT)
     @Inject(method = "onPlayerConnect", at = @At("TAIL"))
     private void polymerNet$removePlayer(ClientConnection connection, ServerPlayerEntity player, ConnectedClientData clientData, CallbackInfo ci) {
-        if (player.server.isHost(player.getGameProfile())) {
+        if (player.getServer().isHost(player.getGameProfile())) {
             ClientUtils.backupPlayer = null;
         }
     }

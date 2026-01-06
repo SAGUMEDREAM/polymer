@@ -4,6 +4,7 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 import com.mojang.authlib.properties.PropertyMap;
 import eu.pb4.polymer.common.api.PolymerCommonUtils;
+import eu.pb4.polymer.common.api.ScopedOverride;
 import eu.pb4.polymer.common.impl.CommonImpl;
 import eu.pb4.polymer.common.impl.client.ClientUtils;
 import eu.pb4.polymer.core.api.block.PolymerBlockUtils;
@@ -28,12 +29,14 @@ import net.minecraft.item.Items;
 import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.registry.Registry;
+import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.resource.featuretoggle.FeatureFlag;
 import net.minecraft.server.network.ServerCommonNetworkHandler;
 import net.minecraft.server.network.ServerPlayNetworkHandler;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerChunkManager;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.Unit;
 import net.minecraft.util.Util;
 import net.minecraft.village.VillagerProfession;
@@ -50,6 +53,7 @@ public final class PolymerUtils {
     public static final String ID = "polymer";
     public static final String NO_TEXTURE_HEAD_VALUE = "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNGUyY2UzMzcyYTNhYzk3ZmRkYTU2MzhiZWYyNGIzYmM0OWY0ZmFjZjc1MWZlOWNhZDY0NWYxNWE3ZmI4Mzk3YyJ9fX0=";
     private static final Set<FeatureFlag> ENABLED_FEATURE_FLAGS = new HashSet<>();
+    private static final Set<RegistryKey<? extends Registry<?>>> SERVER_ONLY_REGISTRIES = new HashSet<>();
 
     private PolymerUtils() {
     }
@@ -64,6 +68,14 @@ public final class PolymerUtils {
 
     public static Collection<FeatureFlag> getClientEnabledFeatureFlags() {
         return ENABLED_FEATURE_FLAGS;
+    }
+
+    public static ScopedOverride ignorePlaySoundExclusion() {
+        if (PolymerImplUtils.IGNORE_PLAY_SOUND_EXCLUSION.get() != null) {
+            return ScopedOverride.NO_OP;
+        }
+        PolymerImplUtils.IGNORE_PLAY_SOUND_EXCLUSION.set(Unit.INSTANCE);
+        return PolymerImplUtils.IGNORE_PLAY_SOUND_EXCLUSION::remove;
     }
 
     /**
@@ -81,7 +93,7 @@ public final class PolymerUtils {
      * Resends world to player. It's useful to run this after player changes resource packs
      */
     public static void reloadWorld(ServerPlayerEntity player) {
-        player.server.execute(() -> {
+        player.getServer().execute(() -> {
             PolymerImplUtils.IS_RELOADING_WORLD.set(Unit.INSTANCE);
             try {
                 player.currentScreenHandler.syncState();
@@ -162,6 +174,7 @@ public final class PolymerUtils {
     }
 
     @SuppressWarnings("unchecked")
+    @Deprecated(forRemoval = true)
     public static boolean isServerOnly(Object obj) {
         return obj instanceof PolymerObject
                 || (obj instanceof ItemStack stack && PolymerItemUtils.isPolymerServerItem(stack))
@@ -186,5 +199,16 @@ public final class PolymerUtils {
 
     public static boolean shouldPreventPacket(ServerCommonNetworkHandler handler, Packet<?> packet) {
         return PacketPatcher.prevent(handler, packet);
+    }
+
+    public static boolean isServerOnlyRegistry(RegistryKey<? extends Registry<?>> key) {
+        return SERVER_ONLY_REGISTRIES.contains(key);
+    }
+
+    public static void markAsServerOnlyRegistry(RegistryKey<? extends Registry<?>> key) {
+        if (key.getValue().getNamespace().equals(Identifier.DEFAULT_NAMESPACE)) {
+            return;
+        }
+        SERVER_ONLY_REGISTRIES.add(key);
     }
 }

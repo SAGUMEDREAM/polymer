@@ -322,6 +322,7 @@ public class Commands {
         return 1;
     }
 
+    @SuppressWarnings("removal")
     private static int stats(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         var player = context.getSource().getPlayer();
 

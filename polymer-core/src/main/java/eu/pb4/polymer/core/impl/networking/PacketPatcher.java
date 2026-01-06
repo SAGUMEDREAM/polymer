@@ -8,7 +8,7 @@ import eu.pb4.polymer.core.api.block.PolymerBlockUtils;
 import eu.pb4.polymer.core.api.entity.PolymerEntity;
 import eu.pb4.polymer.core.api.item.PolymerItemUtils;
 import eu.pb4.polymer.core.api.other.PolymerComponent;
-import eu.pb4.polymer.core.api.other.PolymerStatusEffect;
+import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
 import eu.pb4.polymer.core.api.utils.PolymerUtils;
 import eu.pb4.polymer.core.impl.PolymerImpl;
 import eu.pb4.polymer.core.impl.PolymerImplUtils;
@@ -20,10 +20,10 @@ import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.component.ComponentChanges;
 import net.minecraft.component.ComponentMap;
 import net.minecraft.component.ComponentType;
-import net.minecraft.entity.Entity;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
+import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.listener.ServerConfigurationPacketListener;
@@ -54,11 +54,15 @@ public class PacketPatcher {
 
     public static Packet<?> replace(ServerCommonNetworkHandler handler, Packet<?> packet) {
         if (handler instanceof ServerPlayNetworkHandler handler1) {
-            if (packet instanceof EntityEquipmentUpdateS2CPacket original && EntityAttachedPacket.get(original, original.getEntityId()) instanceof PolymerEntity polymerEntity) {
-                return EntityAttachedPacket.setIfEmpty(
-                        new EntityEquipmentUpdateS2CPacket(((Entity) polymerEntity).getId(), polymerEntity.getPolymerVisibleEquipment(original.getEquipmentList(), handler1.getPlayer())),
-                        (Entity) polymerEntity
-                );
+            if (packet instanceof EntityEquipmentUpdateS2CPacket original) {
+                var entity = EntityAttachedPacket.get(original, original.getEntityId());
+                var polymerEntity = PolymerEntity.get(entity);
+                if (polymerEntity != null) {
+                    return EntityAttachedPacket.setIfEmpty(
+                            new EntityEquipmentUpdateS2CPacket(entity.getId(), polymerEntity.getPolymerVisibleEquipment(original.getEquipmentList(), handler1.getPlayer())),
+                            entity
+                    );
+                }
             }
 
             if (packet instanceof BundleS2CPacket bundleS2CPacket) {
@@ -111,20 +115,23 @@ public class PacketPatcher {
     public static boolean prevent(ServerCommonNetworkHandler handler, Packet<?> packet) {
         if (handler.getClass() == ServerPlayNetworkHandler.class) {
             var player = PacketContext.create(handler);
+            //noinspection DataFlowIssue
             if ((
                     packet instanceof StatusEffectPacketExtension packet2
-                            && ((packet2.polymer$getStatusEffect() instanceof PolymerStatusEffect pol && pol.getPolymerReplacement(player) == null))
+                            && ((PolymerSyncedObject.getSyncedObject(Registries.STATUS_EFFECT, packet2.polymer$getStatusEffect()) != null
+                            && PolymerSyncedObject.getSyncedObject(Registries.STATUS_EFFECT, packet2.polymer$getStatusEffect()).getPolymerReplacement(packet2.polymer$getStatusEffect(), player) == null))
             ) || !EntityAttachedPacket.shouldSend(packet, player.getPlayer())
             ) {
                 return true;
             } else if ((packet instanceof EntityEquipmentUpdateS2CPacket original && original.getEquipmentList().isEmpty()) || !EntityAttachedPacket.shouldSend(packet, player.getPlayer())) {
                 return true;
             } else if ((packet instanceof EntityAttributesS2CPacket original
-                    && EntityAttachedPacket.get(packet, original.getEntityId()) instanceof PolymerEntity entity
+                    && PolymerEntity.get(EntityAttachedPacket.get(packet, original.getEntityId())) instanceof PolymerEntity entity
                     && !InternalEntityHelpers.isLivingEntity(entity.getPolymerEntityType(player)))) {
                 return true;
             } else if (packet instanceof BlockEntityUpdateS2CPacket be) {
-                return PolymerBlockUtils.isPolymerBlockEntityType(be.getBlockEntityType());
+                return PolymerSyncedObject.getSyncedObject(Registries.BLOCK_ENTITY_TYPE, be.getBlockEntityType()) instanceof PolymerSyncedObject<BlockEntityType<?>> obj
+                        && obj.getPolymerReplacement(be.getBlockEntityType(), player) == null;
             } else if (packet instanceof RecipeBookAddS2CPacket recipeBook && PolymerImpl.SPLIT_RECIPE_PACKETS > 0 && recipeBook.entries().size() > PolymerImpl.SPLIT_RECIPE_PACKETS) {
                 var list = new ArrayList<RecipeBookAddS2CPacket.Entry>();
                 if (recipeBook.replace()) {
@@ -141,6 +148,9 @@ public class PacketPatcher {
                     handler.sendPacket(new RecipeBookAddS2CPacket(list, false));
                 }
 
+                return true;
+            } else if (packet instanceof EntityAnimationS2CPacket animationS2CPacket && PolymerEntity.get(EntityAttachedPacket.get(packet, animationS2CPacket.getEntityId())) instanceof PolymerEntity polymerEntity
+                    && !InternalEntityHelpers.isLivingEntity(polymerEntity.getPolymerEntityType(PacketContext.create(handler)))) {
                 return true;
             }
         }
@@ -182,11 +192,9 @@ public class PacketPatcher {
         NbtCompound override = null;
 
         var lookup = context.getRegistryWrapperLookup() != null ? context.getRegistryWrapperLookup() : PolymerImplUtils.FALLBACK_LOOKUP;
-
-        if (original.contains("shared_data", NbtElement.COMPOUND_TYPE)) {
-            var shared = original.getCompound("shared_data");
-            if (shared.contains("display_item")) {
-                var itemNbt = shared.getCompound("display_item");
+        var ops = lookup.getOps(NbtOps.INSTANCE);
+        if (original.get("shared_data") instanceof NbtCompound shared) {
+            if (shared.get("display_item") instanceof NbtCompound itemNbt) {
                 var stack = silentItemStackFromNbt(lookup, itemNbt);
                 if (stack != null && PolymerItemUtils.isPolymerServerItem(stack, context)) {
                     //noinspection ConstantValue
@@ -205,8 +213,7 @@ public class PacketPatcher {
         }
 
 
-        if (original.contains("Items", NbtElement.LIST_TYPE)) {
-            var list = original.getList("Items", NbtElement.COMPOUND_TYPE);
+        if (original.get("Items") instanceof NbtList list) {
             for (int i = 0; i < list.size(); i++) {
                 var nbt = list.getCompound(i);
                 var stack = silentItemStackFromNbt(lookup, nbt);
@@ -224,8 +231,7 @@ public class PacketPatcher {
             }
         }
 
-        if (original.contains("item", NbtElement.COMPOUND_TYPE)) {
-            var nbt = original.getCompound("item");
+        if (original.get("item") instanceof NbtCompound nbt) {
             var stack = silentItemStackFromNbt(lookup, nbt);
             boolean variant = false;
             if (stack == null) {
@@ -240,15 +246,12 @@ public class PacketPatcher {
                 stack = PolymerItemUtils.getPolymerItemStack(stack, context);
                 override.put("item", variant
                         ? ITEM_VARIANT_FORMATTED_ITEM_STACK_CODEC.encodeStart(lookup.getOps(NbtOps.INSTANCE), stack).getOrThrow()
-                        : stack.toNbtAllowEmpty(lookup)
-                );
+                        : ItemStack.OPTIONAL_CODEC.encodeStart(ops, stack).getOrThrow());
             }
         }
 
-        if (original.contains("components", NbtElement.COMPOUND_TYPE)) {
-            var ops = lookup.getOps(NbtOps.INSTANCE);
-
-            var comp = ComponentMap.CODEC.decode(ops, original.getCompound("components"));
+        if (original.get("components") instanceof NbtCompound compound) {
+            var comp = ComponentMap.CODEC.decode(ops, compound);
             if (comp.isSuccess()) {
                 var map = comp.getOrThrow().getFirst();
                 ComponentMap.Builder builder = null;

@@ -2,13 +2,13 @@ package eu.pb4.polymer.core.mixin.block;
 
 import eu.pb4.polymer.core.api.block.PolymerBlock;
 import eu.pb4.polymer.core.api.block.PolymerBlockUtils;
+import eu.pb4.polymer.core.api.utils.PolymerSyncedObject;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.attribute.EntityAttributeInstance;
 import net.minecraft.entity.attribute.EntityAttributes;
-import net.minecraft.entity.effect.StatusEffectInstance;
-import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.network.packet.c2s.play.PlayerActionC2SPacket;
 import net.minecraft.network.packet.s2c.play.*;
+import net.minecraft.registry.Registries;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.network.ServerPlayerInteractionManager;
 import net.minecraft.server.world.ServerWorld;
@@ -67,6 +67,7 @@ public abstract class ServerPlayerInteractionManagerMixin {
                 this.polymer$currentBreakingProgress = 0;
                 this.player.networkHandler.sendPacket(new BlockBreakingProgressS2CPacket(-1, pos, -1));
                 this.finishMining(pos, this.polymer$sequence, "destroyed");
+                this.player.networkHandler.sendPacket(new BlockUpdateS2CPacket(this.world, pos));
                 PolymerBlockUtils.BREAKING_PROGRESS_UPDATE.invoke(x -> x.onBreakingProgressUpdate(player, pos, state, -1));
             } else {
                 var k = this.polymer$currentBreakingProgress > 0.0F ? (int)(this.polymer$currentBreakingProgress * 10) : -1;
@@ -82,22 +83,23 @@ public abstract class ServerPlayerInteractionManagerMixin {
     @Inject(method = "processBlockBreakingAction", at = @At("HEAD"))
     private void polymer_packetReceivedInject(BlockPos pos, PlayerActionC2SPacket.Action action, Direction direction, int worldHeight, int sequence, CallbackInfo ci) {
         this.polymer$sequence = sequence;
-        var state = this.player.getWorld().getBlockState(pos);
-        if (this.polymer$shouldMineServerSide(pos, state)) {
+        var serverState = this.player.getWorld().getBlockState(pos);
+        if (this.polymer$shouldMineServerSide(pos, serverState)) {
             if (action == PlayerActionC2SPacket.Action.START_DESTROY_BLOCK) {
                 this.polymer$currentBreakingProgress = 0;
-                var ogDelta = state.calcBlockBreakingDelta(this.player, this.world, pos);;
-                if (state.getBlock() instanceof PolymerBlock virtualBlock) {
-                    state = PolymerBlockUtils.getBlockStateSafely(virtualBlock, state, PacketContext.create(this.player));
+                var serverDelta = serverState.calcBlockBreakingDelta(this.player, this.world, pos);
+                var clientState = serverState;
+                if (PolymerSyncedObject.getSyncedObject(Registries.BLOCK, serverState.getBlock()) instanceof PolymerBlock virtualBlock) {
+                    clientState = PolymerBlockUtils.getBlockStateSafely(virtualBlock, serverState, PacketContext.create(this.player));
                 }
 
-                float delta = state.calcBlockBreakingDelta(this.player, this.world, pos);
+                float clientDelta = clientState.calcBlockBreakingDelta(this.player, this.world, pos);
 
-                if (delta >= 1.0f && ogDelta < 1.0f) {
-                    this.player.networkHandler.sendPacket(new BlockUpdateS2CPacket(pos, state));
+                if (clientDelta >= 1.0f && serverDelta < 1.0f) {
+                    this.player.networkHandler.sendPacket(new BlockUpdateS2CPacket(pos, serverState));
                 }
 
-                if (ogDelta < 1.0f) {
+                if (serverDelta < 1.0f) {
                     polymer$sendMiningFatigue();
                 }
             } else if (action == PlayerActionC2SPacket.Action.ABORT_DESTROY_BLOCK) {
@@ -105,8 +107,7 @@ public abstract class ServerPlayerInteractionManagerMixin {
                     this.polymer$clearMiningEffect();
                 }
                 this.player.networkHandler.sendPacket(new BlockBreakingProgressS2CPacket(-1, pos, -1));
-                BlockState finalState = state;
-                PolymerBlockUtils.BREAKING_PROGRESS_UPDATE.invoke(x -> x.onBreakingProgressUpdate(player, pos, finalState, -1));
+                PolymerBlockUtils.BREAKING_PROGRESS_UPDATE.invoke(x -> x.onBreakingProgressUpdate(player, pos, serverState, -1));
             }
         } else if (this.polymer$hasMiningFatigue) {
             this.polymer$clearMiningEffect();
@@ -149,8 +150,6 @@ public abstract class ServerPlayerInteractionManagerMixin {
     @Unique
     private void polymer$clearMiningEffect() {
         this.polymer$hasMiningFatigue = false;
-        var x = new EntityAttributeInstance(EntityAttributes.BLOCK_BREAK_SPEED, (a) -> {});
-        x.setBaseValue(-9999);
         this.player.networkHandler.sendPacket(new EntityAttributesS2CPacket(this.player.getId(),
                 List.of(Objects.requireNonNull(this.player.getAttributeInstance(EntityAttributes.BLOCK_BREAK_SPEED)))));
 

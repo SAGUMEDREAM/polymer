@@ -7,12 +7,8 @@ import eu.pb4.polymer.networking.impl.EarlyPlayConnectionMagic;
 import eu.pb4.polymer.networking.impl.ExtClientConnection;
 import eu.pb4.polymer.networking.impl.NetImpl;
 import net.minecraft.network.ClientConnection;
-import net.minecraft.network.NetworkSide;
-import net.minecraft.network.NetworkState;
-import net.minecraft.network.listener.ServerConfigurationPacketListener;
 import net.minecraft.network.listener.ServerPlayPacketListener;
 import net.minecraft.network.packet.Packet;
-import net.minecraft.network.packet.c2s.common.ClientOptionsC2SPacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.*;
@@ -20,8 +16,6 @@ import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(value = ServerConfigurationNetworkHandler.class, priority = 900)
 public abstract class ServerConfigurationNetworkHandlerMixin extends ServerCommonNetworkHandler {
@@ -39,11 +33,11 @@ public abstract class ServerConfigurationNetworkHandlerMixin extends ServerCommo
             return;
         }
 
-        EarlyPlayConnectionMagic.handle(player, clientData.syncedOptions(), (ServerConfigurationNetworkHandler) (Object) this, player.server, connection, (context) -> {
+        EarlyPlayConnectionMagic.handle(player, clientData.syncedOptions(), (ServerConfigurationNetworkHandler) (Object) this, player.getServer(), connection, (context) -> {
             ((ExtClientConnection) connection).polymerNet$wrongPacketConsumer(context::addStoredPacket);
 
             if (connection.isOpen()) {
-                var oldPlayer = player.server.getPlayerManager().getPlayer(this.getProfile().getId());
+                var oldPlayer = player.getServer().getPlayerManager().getPlayer(this.getProfile().getId());
                 if (oldPlayer != null) {
                     this.disconnect(Text.translatable("multiplayer.disconnect.duplicate_login"));
                 } else {

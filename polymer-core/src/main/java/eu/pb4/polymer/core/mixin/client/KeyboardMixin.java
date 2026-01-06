@@ -2,6 +2,7 @@ package eu.pb4.polymer.core.mixin.client;
 
 import eu.pb4.polymer.common.impl.CommonImpl;
 import eu.pb4.polymer.core.impl.PolymerImplUtils;
+import eu.pb4.polymer.core.impl.client.ClientDebugFlags;
 import eu.pb4.polymer.core.impl.client.InternalClientRegistry;
 import eu.pb4.polymer.core.impl.client.networking.PolymerClientProtocol;
 import eu.pb4.polymer.core.impl.networking.C2SPackets;
@@ -9,6 +10,7 @@ import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.minecraft.client.Keyboard;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -23,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class KeyboardMixin {
     @Shadow @Final private MinecraftClient client;
 
-    @Shadow protected abstract void debugLog(String key, Object... args);
+    @Shadow protected abstract void debugLog(Text message);
 
     @Inject(method = "debugLog(Ljava/lang/String;[Ljava/lang/Object;)V", at = @At("HEAD"))
     private void polymer_catchChange(String key, Object[] args, CallbackInfo ci) {
@@ -37,9 +39,21 @@ public abstract class KeyboardMixin {
 
     @Inject(method = "processF3", at = @At("TAIL"), cancellable = true)
     private void polymer_processF3(int key, CallbackInfoReturnable<Boolean> cir) {
-        if (key == GLFW.GLFW_KEY_0 && CommonImpl.DEVELOPER_MODE) {
+        if (!CommonImpl.DEVELOPER_MODE) {
+            return;
+        }
+
+        if (key == GLFW.GLFW_KEY_0) {
             PolymerImplUtils.dumpRegistry();
-            this.debugLog("Dumped Polymer Client registry!");
+            this.debugLog(Text.literal("Dumped Polymer Client registry!"));
+            cir.setReturnValue(true);
+        } else if (key == GLFW.GLFW_KEY_LEFT_BRACKET) {
+            ClientDebugFlags.customItemModels = !ClientDebugFlags.customItemModels;
+            this.debugLog(Text.literal("Component item models: " + ClientDebugFlags.customItemModels));
+            cir.setReturnValue(true);
+        } else if (key == GLFW.GLFW_KEY_RIGHT_BRACKET) {
+            ClientDebugFlags.customFonts = !ClientDebugFlags.customFonts;
+            this.debugLog(Text.literal("Custom fonts: " + ClientDebugFlags.customFonts));
             cir.setReturnValue(true);
         }
     }
